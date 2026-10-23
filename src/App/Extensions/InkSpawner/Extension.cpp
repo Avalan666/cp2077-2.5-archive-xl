@@ -31,9 +31,9 @@ bool App::InkSpawnerExtension::Load()
 
         Hook<Raw::InkWidgetLibrary::SpawnFromLocal>(&OnSpawnLocal).OrThrow();
         Hook<Raw::InkWidgetLibrary::SpawnFromExternal>(&OnSpawnExternal).OrThrow();
-        Hook<Raw::InkWidgetLibrary::AsyncSpawnFromLocal>(&OnAsyncSpawnLocal).OrThrow();
-        Hook<Raw::InkWidgetLibrary::AsyncSpawnFromExternal>(&OnAsyncSpawnExternal).OrThrow();
-        HookBefore<Raw::InkSpawner::FinishAsyncSpawn>(&OnFinishAsyncSpawn).OrThrow();
+        // The three asynchronous paths are unmapped in CP2.5. Synchronous
+        // spawning still supports controller overrides and external dependencies.
+        LogWarning("[CP25 Extended] InkSpawner asynchronous hooks missing; synchronous spawn hooks enabled.");
     });
 
     return true;
@@ -43,9 +43,7 @@ bool App::InkSpawnerExtension::Unload()
 {
     Unhook<Raw::InkWidgetLibrary::SpawnFromLocal>();
     Unhook<Raw::InkWidgetLibrary::SpawnFromExternal>();
-    Unhook<Raw::InkWidgetLibrary::AsyncSpawnFromLocal>();
-    Unhook<Raw::InkWidgetLibrary::AsyncSpawnFromExternal>();
-    Unhook<Raw::InkSpawner::FinishAsyncSpawn>();
+    // Async hooks are not installed on 2.5.
 
     return true;
 }
