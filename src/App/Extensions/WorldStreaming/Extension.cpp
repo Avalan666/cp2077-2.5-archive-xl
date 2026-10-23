@@ -143,7 +143,7 @@ void App::WorldStreamingExtension::OnSectorPostLoad(Red::world::StreamingSector*
 
     // This is a read-only ABI probe. The old node buffer offset (0x40) is
     // deliberately NOT used for writes here. Only compare metadata.
-    const auto& buffer = Raw::StreamingSector::NodeBuffer::Ref(aSector);
+    auto& buffer = Raw::StreamingSector::NodeBuffer::Ref(aSector);
     const auto foundNodes = buffer.nodeSetups.GetInstanceCount();
     for (const auto& sectorMod : sectorMods.value())
     {
