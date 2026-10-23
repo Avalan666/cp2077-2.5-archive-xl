@@ -1,5 +1,7 @@
 #include "Extension.hpp"
 #include "Core/Facades/Container.hpp"
+#include "App/Extensions/ExtensionService.hpp"
+#include <atomic>
 #include "App/Extensions/ResourceMeta/Extension.hpp"
 
 namespace
@@ -102,6 +104,9 @@ void App::QuestPhaseExtension::OnPhasePreload(void* aLoader, Red::ResourcePath a
 
 void App::QuestPhaseExtension::OnGameRestored(Red::QuestsSystem* aSystem)
 {
+    // Probe again only once the game is restoring actual gameplay state.
+    Core::Resolve<App::ExtensionService>()->TryRestoreTweakDB("OnGameRestored");
+
     if (s_forced.empty())
         return;
 
@@ -149,6 +154,11 @@ void App::QuestPhaseExtension::OnGameRestored(Red::QuestsSystem* aSystem)
 void App::QuestPhaseExtension::OnQuestStart(Red::questRootInstance* aInstance, Red::QuestContext* aContext,
                                             const Red::Handle<Red::questQuestResource>& aResource)
 {
+    // New games may start quests without going through OnGameRestored.
+    static std::atomic_bool s_firstQuestProbe{false};
+    if (!s_firstQuestProbe.exchange(true))
+        Core::Resolve<App::ExtensionService>()->TryRestoreTweakDB("FirstQuestStart");
+
     if (s_forced.empty())
         return;
 
