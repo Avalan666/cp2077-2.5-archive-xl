@@ -24,7 +24,9 @@ std::string_view App::MeshExtension::GetName()
 bool App::MeshExtension::Load()
 {
     HookAfter<Raw::CMesh::FindAppearance>(&OnFindAppearance).OrThrow();
-    Hook<Raw::CMesh::LoadMaterialsAsync>(&OnLoadMaterials).OrThrow();
+    // CP2.5: CMesh_LoadMaterialsAsync is absent from the address library.
+    // Restore the other mesh operations while retaining its original logic.
+    LogWarning("[CP25 Appearance] Mesh material loading hook unavailable on 2.5; mapped mesh hooks remain active.");
     Hook<Raw::CMesh::AddStubAppearance>(&OnAddStubAppearance).OrThrow();
     Hook<Raw::CMesh::ShouldPreloadAppearances>(&OnPreloadAppearances).OrThrow();
 
@@ -49,7 +51,7 @@ bool App::MeshExtension::Unload()
     }
 
     Unhook<Raw::CMesh::FindAppearance>();
-    Unhook<Raw::CMesh::LoadMaterialsAsync>();
+    // CMesh::LoadMaterialsAsync is not hooked on 2.5.
     Unhook<Raw::CMesh::AddStubAppearance>();
     Unhook<Raw::CMesh::ShouldPreloadAppearances>();
 
