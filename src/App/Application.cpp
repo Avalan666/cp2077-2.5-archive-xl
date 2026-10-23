@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 Stage4] ResourcePatch partially enabled with mapped native hooks. Legacy standalone patches remain disabled.");
+    LogInfo("[CP25 WorldProbe] Read-only streaming sector compatibility diagnostics; no world mutations.");
 }
