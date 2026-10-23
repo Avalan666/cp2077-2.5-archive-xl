@@ -37,7 +37,8 @@ bool App::AttachmentExtension::Load()
     HookAfter<Raw::CharacterCustomizationHairstyleController::CheckState>(&OnCheckHairState).OrThrow();
     //HookAfter<Raw::CharacterCustomizationGenitalsController::CheckState>(&OnCheckBodyState).OrThrow();
     HookAfter<Raw::CharacterCustomizationFeetController::CheckState>(&OnCheckFeetState).OrThrow();
-    HookWrap<Raw::AppearanceChanger::GetSuffixValue>(&OnGetSuffixValue).OrThrow();
+    // CP2.5: AppearanceChanger_GetSuffixValue is not mapped.
+    LogWarning("[CP25 Appearance] Attachment suffix-value hook unavailable; remaining attachment hooks enabled.");
 
     {
         std::unique_lock _(s_slotsMutex);
@@ -57,7 +58,7 @@ bool App::AttachmentExtension::Unload()
     Unhook<Raw::CharacterCustomizationHairstyleController::CheckState>();
     // Unhook<Raw::CharacterCustomizationGenitalsController::CheckState>();
     Unhook<Raw::CharacterCustomizationFeetController::CheckState>();
-    Unhook<Raw::AppearanceChanger::GetSuffixValue>();
+    // AppearanceChanger::GetSuffixValue is not hooked on 2.5.
 
     return true;
 }
