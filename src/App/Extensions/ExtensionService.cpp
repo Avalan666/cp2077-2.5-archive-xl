@@ -42,11 +42,12 @@ void App::ExtensionService::OnBootstrap()
     m_loader->Add<GarmentExtension>();
     m_loader->Add<PuppetStateExtension>();
     m_loader->Add<CustomizationExtension>();
-    m_loader->Add<JournalExtension>();
+    // CP2.5: Journal disabled. The old ProcessJournalIndex address is gone;
+    // both attempted substitute timings triggered startup crashes.
     m_loader->Add<QuestPhaseExtension>();
     m_loader->Add<WorldStreamingExtension>();
     m_loader->Add<InkSpawnerExtension>();
-    LogInfo("[CP25 JournalFix] Journal prefetch moved before initialization; Customization and synchronous InkSpawner remain enabled.");
+    LogInfo("[CP25 JournalRevert] Journal disabled after startup regression; Customization and synchronous InkSpawner retained.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
