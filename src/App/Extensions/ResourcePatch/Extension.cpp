@@ -221,25 +221,73 @@ void App::ResourcePatchExtension::OnResourceDeserialize(void* aSerializer, uint6
 void App::ResourcePatchExtension::ProbeResourceReady(Red::ResourceSerializerContext* aContext)
 {
     static std::atomic<uint32_t> calls{0};
-    const auto n = ++calls;
-    if (n > 64)
-        return;
-
+    static std::atomic<uint32_t> relevantTypes{0};
+    const uint32_t n = ++calls;
     if (!aContext)
     {
-        LogWarning("[CP25 SerializerProbe] call={} context=null", n);
+        LogWarning("[CP25 SerializerTypes] call={} context=NULL", n);
         return;
     }
 
-    // The existing SDK defines the serializables DynArray at offset 0x230.
-    // Read only scalar metadata, avoiding traversal until its layout is
-    // validated against live observations. These values are diagnostic.
-    const auto count = aContext->serializables.Size();
+    const uint32_t count = aContext->serializables.Size();
     const auto data = reinterpret_cast<uintptr_t>(aContext->serializables.Data());
-    const bool plausible = count <= 100000 && (count == 0 || data != 0);
-    LogInfo("[CP25 SerializerProbe] call={} context={:#x} pathHash={:#x} serializableCount={} data={:#x} plausible={}",
-            n, reinterpret_cast<uintptr_t>(aContext), aContext->request.path.hash,
-            count, data, plausible);
+    const bool plausible = count <= 128 && (count == 0 || data != 0);
+    if (!plausible)
+    {
+        if (n <= 16)
+            LogWarning("[CP25 SerializerTypes] call={} implausible array count={} data={:#x}; inspection skipped.",
+                       n, count, data);
+        return;
+    }
+
+    if (n <= 8)
+        LogInfo("[CP25 SerializerTypes] call={} pathHash={:#x} serializables={}",
+                n, aContext->request.path.hash, count);
+
+    // Types are inspected without changing any resources. Unlike the prior
+    // probe, relevant resource types are reported even if they are loaded
+    // long after the first 64 callbacks (e.g. after entering gameplay).
+    const auto inspect = (std::min)(count, uint32_t{16});
+    for (uint32_t i = 0; i < inspect; ++i)
+    {
+        const auto& serializable = aContext->serializables[i];
+        if (!serializable)
+        {
+            if (n <= 8)
+                LogWarning("[CP25 SerializerTypes] call={} item={} NULL handle", n, i);
+            continue;
+        }
+
+        const auto* nativeType = serializable->GetNativeType();
+        if (!nativeType)
+        {
+            if (n <= 8)
+                LogWarning("[CP25 SerializerTypes] call={} item={} NULL native type", n, i);
+            continue;
+        }
+
+        const auto typeName = nativeType->GetName();
+        const bool curve = typeName == Red::GetTypeName<Red::CurveSet>();
+        const bool device = typeName == Red::GetTypeName<Red::gameDeviceResource>();
+        const bool world = typeName == Red::GetTypeName<Red::worldStreamingWorld>();
+        const bool lip = typeName == Red::GetTypeName<Red::inkanimAnimationLibraryResource>();
+        const bool relevant = curve || device || world || lip;
+
+        if (relevant)
+        {
+            const uint32_t match = ++relevantTypes;
+            if (match <= 80)
+            {
+                LogInfo("[CP25 SerializerTypes] TARGET#{} call={} item={} type='{}' requestPath={:#x} count={}",
+                        match, n, i, typeName.ToString(), aContext->request.path.hash, count);
+            }
+        }
+        else if (n <= 12 && i < 3)
+        {
+            LogInfo("[CP25 SerializerTypes] sample call={} item={} type='{}' requestPath={:#x}",
+                    n, i, typeName.ToString(), aContext->request.path.hash);
+        }
+    }
 }
 
 void App::ResourcePatchExtension::OnResourceReady(Red::ResourceSerializerContext* aContext)
