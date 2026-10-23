@@ -16,6 +16,7 @@ public:
 
 private:
     static void OnLoadFactoryAsync(uintptr_t aIndex, Red::ResourcePath aPath, uintptr_t aContext);
+    static void OnResolveResource(uintptr_t aIndex, Red::ResourcePath& aPath, Red::CName aName);
 
     inline static Core::Map<Red::ResourcePath, std::string> s_factories;
     inline static Core::SharedPtr<ResourcePathRegistry> s_resourcePathRegistry;
