@@ -88,6 +88,8 @@ private:
 
     static void OnFindAppearance(Red::Handle<Red::mesh::MeshAppearance>& aAppearance, Red::CMesh* aMesh, Red::CName aName);
     static void* OnLoadMaterials(Red::CMesh* aTargetMesh, Red::MeshMaterialsToken& aToken,
+    static void OnMaterialSetup(Red::mesh::MeshAppearance& aAppearance,
+                                Red::Handle<Red::mesh::MeshAppearance>& aOut, uint8_t a3);
                                  const Red::DynArray<Red::CName>& aMaterialNames, uint8_t a4);
     static void OnAddStubAppearance(Red::CMesh* aMesh);
     static bool OnPreloadAppearances(Red::CMesh* aMesh);
