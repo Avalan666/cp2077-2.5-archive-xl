@@ -15,10 +15,11 @@ std::string_view App::ResourceLinkExtension::GetName()
 
 bool App::ResourceLinkExtension::Load()
 {
+    LogInfo("[CP25 Stage3] Installing native resource alias/copy hooks.");
     HookBefore<Raw::ResourceLoader::LoadAsync>(&OnLoaderResourceRequest).OrThrow();
     Hook<Raw::ResourceDepot::RequestResource>(&OnDepotResourceRequest).OrThrow();
     Hook<Raw::ResourceDepot::CheckResource>(&OnDepotResourceCheck).OrThrow();
-
+    LogInfo("[CP25 Stage3] Resource alias/copy hooks installed.");
     return true;
 }
 
@@ -201,6 +202,8 @@ void App::ResourceLinkExtension::Configure()
 
     s_mappings.insert(s_copies.begin(), s_copies.end());
     s_mappings.insert(s_links.begin(), s_links.end());
+    LogInfo("[CP25 Stage3] Resource mappings configured: {} links, {} copies.",
+            s_links.size(), s_copies.size());
 
     m_configs.clear();
 }
