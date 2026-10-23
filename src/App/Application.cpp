@@ -28,14 +28,17 @@ App::Application::Application(HMODULE aHandle, const RED4ext::v1::Sdk* aSdk)
     Register<Support::RED4extProvider>(aHandle, aSdk)
         ->EnableAddressLibrary()
         ->RegisterScripts(Env::ScriptsDir());
-    // CP2.5 loader probe: deliberately do not bootstrap the legacy archive
-    // loader, extension hooks, or patches with unresolved address hashes.
+    // CP2.5 stage 1: restore the path registry and compatible extension modules.
+    // Do NOT restore the old ArchiveService or patches with missing addresses.
+    Register<Support::RedLibProvider>();
+    Register<App::ResourcePathRegistry>();
     Register<App::ArchiveProbe>(Env::BundleDir());
+    Register<App::ExtensionService>(Env::BundleDir());
 }
 
 void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 Inject] Experimental archive injection; legacy extensions and patches remain disabled.");
+    LogInfo("[CP25 Stage1] Experimental archive injection and limited XL extensions enabled. Legacy patches remain disabled.");
 }
