@@ -3,7 +3,7 @@ name: ArchiveXL Cyberpunk 2.5 Build
 
 on:
   push:
-    branches: [main, cp25-loader-probe]
+    branches: [main, cp25-loader-probe, cp25-loader-inject]
   workflow_dispatch:
 
 permissions:
