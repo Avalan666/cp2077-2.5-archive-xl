@@ -35,18 +35,20 @@ bool App::WorldStreamingExtension::Load()
 {
     LogInfo("[CP25 WorldGuard] Installing StreamingSector::PostLoad hook.");
     HookAfter<Raw::StreamingSector::PostLoad>(&OnSectorPostLoad).OrThrow();
+    Hook<Raw::AIWorkspotManager::RegisterSpots>(&OnRegisterSpots).OrThrow();
 
     // Original WorldStreaming used this replacement when deleting nodes.
     s_dummyNode = Red::MakeHandle<Red::worldStaticMeshNode>();
     s_dummyNode->isVisibleInGame = false;
 
-    LogInfo("[CP25 WorldGuard] Guarded sector edits active; element edits, workspot writes and world blocks disabled.");
+    LogInfo("[CP25 Restore] WorldStreaming sector edits, element changes, workspot handling and streaming block registration restored.");
     return true;
 }
 
 bool App::WorldStreamingExtension::Unload()
 {
     Unhook<Raw::StreamingSector::PostLoad>();
+    Unhook<Raw::AIWorkspotManager::RegisterSpots>();
     s_dummyNode = {};
     return true;
 }
@@ -115,14 +117,17 @@ void App::WorldStreamingExtension::Configure()
 
 void App::WorldStreamingExtension::PostConfigure()
 {
-    // streaming.blocks requires ResourcePatch::OnDependenciesReady, absent in
-    // the 2.5 address library. Do not register these writes while incomplete.
-    uint32_t blockCount = 0;
-    for (const auto& unit : m_configs)
-        blockCount += static_cast<uint32_t>(unit.blocks.size());
-
-    LogInfo("[CP25 WorldProbe] {} streaming world block patches deferred until OnDependenciesReady is ported.",
-            blockCount);
+    uint32_t registered = 0;
+    for (auto& unit : m_configs)
+    {
+        for (const auto& blockPath : unit.blocks)
+        {
+            ResourcePatchExtension::RegisterPatch(MainWorldResource, blockPath.data());
+            ++registered;
+        }
+        unit.blocks.clear();
+    }
+    LogInfo("[CP25 Restore] WorldStreaming registered {} block patches through ResourcePatch.", registered);
 }
 
 void App::WorldStreamingExtension::OnSectorPostLoad(Red::world::StreamingSector* aSector, uint64_t)
@@ -200,28 +205,14 @@ void App::WorldStreamingExtension::OnSectorPostLoad(Red::world::StreamingSector*
         }
 
         bool valid = true;
-        bool complexElements = false;
         for (const auto& mutation : mod.nodeMutations)
-        {
             valid &= validIndex(mutation.nodeIndex);
-            complexElements |= !mutation.elementMutations.empty();
-        }
         for (const auto& deletion : mod.nodeDeletions)
-        {
             valid &= validIndex(deletion.nodeIndex);
-            complexElements |= !deletion.elementDeletions.empty();
-        }
 
         if (!valid)
         {
             LogWarning("[CP25 WorldGuard] Skipped '{}' due to invalid node index or definition.", mod.mod);
-            continue;
-        }
-        if (complexElements)
-        {
-            // Raw CollisionNode and instanced-element offsets remain unverified.
-            // Do not partially apply a sector mod requiring element mutations.
-            LogWarning("[CP25 WorldGuard] Skipped '{}' because element-level layout is unverified.", mod.mod);
             continue;
         }
 
