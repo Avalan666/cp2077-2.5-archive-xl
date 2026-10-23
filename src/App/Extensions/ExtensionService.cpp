@@ -46,7 +46,7 @@ void App::ExtensionService::OnBootstrap()
     m_loader->Add<QuestPhaseExtension>();
     m_loader->Add<WorldStreamingExtension>();
     m_loader->Add<InkSpawnerExtension>();
-    LogInfo("[CP25 Extended] Added Customization, Journal and synchronous InkSpawner alongside appearance, ResourcePatch and WorldStreaming systems.");
+    LogInfo("[CP25 JournalFix] Journal prefetch moved before initialization; Customization and synchronous InkSpawner remain enabled.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
