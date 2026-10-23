@@ -51,7 +51,7 @@ std::string_view App::ResourcePatchExtension::GetName()
 
 bool App::ResourcePatchExtension::Load()
 {
-    LogInfo("[CP25 Stage4] ResourcePatch: installing mapped native hooks (OnDependenciesReady omitted).");
+    LogInfo("[CP25 Restore] ResourcePatch: mapped hooks with post-processing via OnResourceReady.");
     HookBefore<Raw::ResourceSerializer::Load>(&OnResourceRequest).OrThrow();
     HookBefore<Raw::ResourceSerializer::Deserialize>(&OnResourceDeserialize).OrThrow();
     // Cyberpunk 2.5 no longer maps OnDependenciesReady. OnResourceReady
@@ -69,7 +69,7 @@ bool App::ResourcePatchExtension::Load()
     HookAfter<Raw::PersistencySystem::SetPersistentStateData>(&OnSetPersistentStateData).OrThrow();
 
     s_resourcePathRegistry = Core::Resolve<ResourcePathRegistry>();
-    LogInfo("[CP25 Stage4] ResourcePatch: mapped hooks attached.");
+    LogInfo("[CP25 Restore] ResourcePatch hooks and post-processing attached.");
 
     return true;
 }
@@ -78,7 +78,7 @@ bool App::ResourcePatchExtension::Unload()
 {
     Unhook<Raw::ResourceSerializer::Load>();
     Unhook<Raw::ResourceSerializer::Deserialize>();
-    // No OnDependenciesReady hook is installed on 2.5.
+    // Cyberpunk 2.5 post-processing uses OnResourceReady.
     Unhook<Raw::ResourceSerializer::OnResourceReady>();
     Unhook<Raw::EntityTemplate::PostLoad>();
     Unhook<Raw::AppearanceResource::PostLoad>();
