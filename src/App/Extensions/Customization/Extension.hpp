@@ -113,7 +113,7 @@ private:
     Core::Set<Red::CName> m_customEntryNames;
     Red::SharedSpinLock m_customEntriesMergeLock;
     Core::Set<Red::CName> m_hairColorNames;
-    bool m_customEntriesMerged;
-    bool m_customizationActive;
+    bool m_customEntriesMerged{false};
+    bool m_customizationActive{false};
 };
 }
