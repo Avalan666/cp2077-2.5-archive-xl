@@ -3,7 +3,7 @@ name: ArchiveXL Cyberpunk 2.5 Build
 
 on:
   push:
-    branches: [main, cp25-loader-probe, cp25-loader-inject, cp25-extensions-stage1, cp25-extensions-stage2, cp25-extensions-stage3, cp25-extensions-stage4, cp25-worldstream-probe, cp25-worldstream-layout, cp25-worldstream-guarded, cp25-serializer-ready-probe, cp25-serializer-types, cp25-restore-resource-world, cp25-appearance-restore, cp25-more-extensions, cp25-journal-crashfix, cp25-journal-revert, cp25-journal-depot-ready, cp25-tweakdb-suffix-restore]
+    branches: [main, cp25-loader-probe, cp25-loader-inject, cp25-extensions-stage1, cp25-extensions-stage2, cp25-extensions-stage3, cp25-extensions-stage4, cp25-worldstream-probe, cp25-worldstream-layout, cp25-worldstream-guarded, cp25-serializer-ready-probe, cp25-serializer-types, cp25-restore-resource-world, cp25-appearance-restore, cp25-more-extensions, cp25-journal-crashfix, cp25-journal-revert, cp25-journal-depot-ready, cp25-tweakdb-suffix-restore, cp25-tweakdb-late-ready]
   workflow_dispatch:
 
 permissions:
