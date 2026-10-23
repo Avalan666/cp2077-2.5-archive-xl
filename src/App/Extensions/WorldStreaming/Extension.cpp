@@ -124,32 +124,58 @@ void App::WorldStreamingExtension::OnSectorPostLoad(Red::world::StreamingSector*
     const auto observed = ++total;
     if (!aSector)
     {
-        LogWarning("[CP25 WorldProbe] PostLoad callback received null sector pointer.");
+        LogWarning("[CP25 WorldLayout] PostLoad callback received null sector pointer.");
         return;
     }
 
-    if (observed <= 4)
-        LogInfo("[CP25 WorldProbe] PostLoad event {} sector={:#x} resource-hash={:#x}",
-                observed, reinterpret_cast<uintptr_t>(aSector), aSector->path.hash);
-
+    const auto pathHash = aSector->path.hash;
     std::shared_lock _(s_sectorsLock);
     const auto& sectorMods = s_sectors.find(aSector->path);
-    if (sectorMods == s_sectors.end())
+    const bool isTarget = sectorMods != s_sectors.end();
+
+    // Inspect the existing SDK's 0x40 node-buffer interpretation, without
+    // dereferencing its stored node pointers or modifying anything. Only
+    // compare scalar metadata: payload byte count, 0x90-byte setup stride,
+    // setup data address and node definition count.
+    if (observed > 24 && !isTarget)
         return;
 
-    const auto matchNumber = ++matching;
-    if (matchNumber > 32)
+    if (isTarget && ++matching > 40)
         return;
 
-    // This is a read-only ABI probe. The old node buffer offset (0x40) is
-    // deliberately NOT used for writes here. Only compare metadata.
-    auto& buffer = Raw::StreamingSector::NodeBuffer::Ref(aSector);
-    const auto foundNodes = buffer.nodeSetups.GetInstanceCount();
+    const auto& candidate = Raw::StreamingSector::NodeBuffer::Ref(aSector);
+    constexpr auto stride = sizeof(Red::CompiledNodeInstanceSetupInfo);
+    const auto setupBytes = candidate.nodeSetups.buffer.size;
+    const auto setupData = reinterpret_cast<uintptr_t>(candidate.nodeSetups.buffer.data);
+    const auto definitions = candidate.nodes.Size();
+    const bool divisible = (setupBytes % stride == 0);
+    const auto setups = setupBytes / stride;
+    const bool plausible = divisible && setupBytes <= 64u * 1024u * 1024u &&
+                           setups <= 250000u && definitions <= 250000u &&
+                           (setupBytes == 0 || setupData != 0);
+
+    if (!plausible)
+    {
+        LogWarning("[CP25 WorldLayout] event={} hash={:#x} target={} candidate-offset=0x40 looks INVALID: setupBytes={} setupData={:#x} nodeDefinitions={} stride={}",
+                   observed, pathHash, isTarget, setupBytes, setupData,
+                   definitions, stride);
+        return;
+    }
+
+    if (observed <= 24 || isTarget)
+    {
+        LogInfo("[CP25 WorldLayout] event={} hash={:#x} target={} candidate-offset=0x40 setupBytes={} setupCount={} nodeDefinitions={} setupData={:#x}",
+                observed, pathHash, isTarget, setupBytes, setups, definitions, setupData);
+    }
+
+    if (!isTarget)
+        return;
+
     for (const auto& sectorMod : sectorMods.value())
     {
-        LogInfo("[CP25 WorldProbe] Matching sector '{}' expected-nodes={} observed-nodes={} matching-layout={}",
-                sectorMod.path, sectorMod.expectedNodes, foundNodes,
-                foundNodes == sectorMod.expectedNodes);
+        LogInfo("[CP25 WorldLayout] Matched '{}' expectedSetups={} observedSetups={} countMatches={}",
+                sectorMod.path, sectorMod.expectedNodes, setups,
+                sectorMod.expectedNodes == setups);
     }
 }
 
