@@ -57,35 +57,33 @@ void App::JournalExtension::Reload()
     }
 }
 
-void App::JournalExtension::OnLoadJournal(uintptr_t a1, Red::JobGroup& aJobGroup)
+void App::JournalExtension::PostConfigure()
 {
-    LogInfo("[{}] Journal tree is initializing...", ExtensionName);
-
+    // CP2.5: Prefetch mod journals during ArchiveXL configuration, before
+    // the engine begins initializing the journal tree. Never block the
+    // journal's own initialization job on a newly requested resource.
+    ResetResourceData();
     if (m_configs.empty())
-    {
-        LogInfo("[{}] No entries to merge.", ExtensionName);
         return;
-    }
 
-    auto queue = Red::JobQueue(aJobGroup);
     auto loader = Red::ResourceLoader::Get();
-
     for (const auto& unit : m_configs)
     {
         for (const auto& path : unit.journals)
         {
             auto token = loader->LoadAsync<Red::game::JournalResource>(path.c_str());
-
-            if (!token->IsLoaded())
+            if (!token)
             {
-                queue.Wait(token->job);
+                LogWarning("[CP25 JournalFix] Failed to request journal resource '{}'.", path);
+                continue;
             }
-
             s_resources.emplace_back(token);
             s_paths.emplace(token->path, path);
         }
     }
+    LogInfo("[CP25 JournalFix] Prefetched {} journal resources before journal initialization.", s_resources.size());
 }
+
 
 void App::JournalExtension::OnInitializeRoot(Red::game::JournalRootFolderEntry* aJournalRoot, uintptr_t, uintptr_t,
                                              Red::JobQueue& aJobQueue)
@@ -95,31 +93,21 @@ void App::JournalExtension::OnInitializeRoot(Red::game::JournalRootFolderEntry* 
     if (m_configs.empty())
         return;
 
-    // In CP2.5 the old journal-index callback is unmapped. Load additional
-    // journal resources here, using the hook's existing job queue for waits.
-    // The engine invokes this hook before it initializes the root folder.
-    if (s_resources.empty())
-    {
-        auto loader = Red::ResourceLoader::Get();
-        for (const auto& unit : m_configs)
-        {
-            for (const auto& path : unit.journals)
-            {
-                auto token = loader->LoadAsync<Red::game::JournalResource>(path.c_str());
-                if (!token->IsLoaded())
-                    aJobQueue.Wait(token->job);
-                s_resources.emplace_back(token);
-                s_paths.emplace(token->path, path);
-            }
-        }
-        LogInfo("[CP25 Extended] Journal resource loading moved to root initialization; {} configured resources.", s_resources.size());
-    }
-
+    // Resources were requested by PostConfigure. If a request is still
+    // outstanding, skip it rather than blocking the journal initializer.
+    // On CP2.5 the old late-load path crashed with a null dereference.
     auto successAll = true;
     auto mergedAny = false;
 
     for (const auto& resource : s_resources)
     {
+        if (!resource || !resource->IsLoaded())
+        {
+            LogWarning("[CP25 JournalFix] Skipping an unfinished journal resource during root initialization.");
+            successAll = false;
+            continue;
+        }
+
         if (resource->IsFailed())
         {
             LogError("[{}] Resource \"{}\" failed to load.", ExtensionName, s_paths[resource->path]);
@@ -127,7 +115,21 @@ void App::JournalExtension::OnInitializeRoot(Red::game::JournalRootFolderEntry* 
             continue;
         }
 
-        auto root = resource->Get()->entry.GetPtr<Red::game::JournalContainerEntry>();
+        const auto& journal = resource->Get();
+        if (!journal)
+        {
+            LogWarning("[CP25 JournalFix] Loaded journal resource has no root object; skipping.");
+            successAll = false;
+            continue;
+        }
+
+        auto root = journal->entry.GetPtr<Red::game::JournalContainerEntry>();
+        if (!root)
+        {
+            LogWarning("[CP25 JournalFix] Loaded journal resource has null entry; skipping.");
+            successAll = false;
+            continue;
+        }
 
         if (!root->GetType()->IsA(s_rootEntryType))
         {
