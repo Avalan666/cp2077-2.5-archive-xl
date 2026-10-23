@@ -57,32 +57,62 @@ void App::ExtensionService::OnBootstrap()
         m_loader->OnDepotReady();
     });
 
-    // CP2.5 no longer maps TweakDB_Load. The engine-init completion hook
-    // is mapped and also used by InkSpawner. The appearance-suffix list is a
-    // concrete indication that TweakDB records have been loaded.
+    // InitEngine is not sufficient evidence that TweakDB data has loaded.
+    // Probe here and retry at an existing late gameplay lifecycle callback.
     HookOnceAfter<Raw::CBaseEngine::InitEngine>([&]() {
-        if (!m_loader)
-            return;
-
-        const auto* db = Red::TweakDB::Get();
-        if (!db)
-        {
-            LogWarning("[CP25 TweakDB] Engine initialized but TweakDB is unavailable; suffix records not installed.");
-            return;
-        }
-
-        constexpr auto suffixList = Red::TweakDBID(
-            "itemsFactoryAppearanceSuffix.ItemsFactoryAppearanceSuffixOrderDefault");
-        if (!Red::RecordExists(suffixList))
-        {
-            LogWarning("[CP25 TweakDB] Appearance suffix ordering record absent at engine init; no suffix changes made.");
-            return;
-        }
-
-        LogInfo("[CP25 TweakDB] Existing appearance-suffix list found; restoring registered TweakDB extension changes.");
-        m_loader->OnTweakDBReady();
-        LogInfo("[CP25 TweakDB] TweakDB extension changes applied.");
+        TryRestoreTweakDB("InitEngine");
     });
+
+}
+
+void App::ExtensionService::TryRestoreTweakDB(const char* aStage)
+{
+    // Protect the dispatch against simultaneous engine/gameplay callbacks.
+    std::unique_lock lock(m_tweakDBMutex);
+    if (m_tweakDBDispatched || !m_loader)
+        return;
+
+    auto* db = Red::TweakDB::Get();
+    if (!db)
+    {
+        LogWarning("[CP25 TweakDBProbe] {}: TweakDB instance unavailable.", aStage);
+        return;
+    }
+
+    // Distinguish a generally empty/unloaded database from a missing
+    // appearance-suffix registry. These probes do not modify any records.
+    constexpr auto baseItem = Red::TweakDBID("Items.GenericHeadClothing");
+    constexpr auto genderSuffix = Red::TweakDBID("itemsFactoryAppearanceSuffix.Gender");
+    constexpr auto suffixOrder = Red::TweakDBID(
+        "itemsFactoryAppearanceSuffix.ItemsFactoryAppearanceSuffixOrderDefault");
+    const bool basePresent = Red::RecordExists(baseItem);
+    const bool genderPresent = Red::RecordExists(genderSuffix);
+    const bool orderPresent = Red::RecordExists(suffixOrder);
+    bool orderFlatPresent = false;
+    {
+        std::shared_lock dbLock(db->mutex00);
+        orderFlatPresent = db->GetFlatValue({suffixOrder, ".appearanceSuffixes"}) != nullptr;
+    }
+
+    LogInfo("[CP25 TweakDBProbe] {}: baseItem={} genderSuffix={} suffixOrder={} suffixOrderFlat={}.",
+            aStage, basePresent, genderPresent, orderPresent, orderFlatPresent);
+
+    if (!orderPresent || !orderFlatPresent)
+    {
+        LogWarning("[CP25 TweakDBProbe] {}: suffix registry not ready/present; no TweakDB writes performed.", aStage);
+        return;
+    }
+
+    m_tweakDBDispatched = true;
+    m_loader->OnTweakDBReady();
+
+    // Positive registration evidence is not proof of runtime suffix selection.
+    const bool bodyType = Red::RecordExists(Red::TweakDBID("itemsFactoryAppearanceSuffix.BodyType"));
+    const bool armsState = Red::RecordExists(Red::TweakDBID("itemsFactoryAppearanceSuffix.ArmsState"));
+    const bool legsState = Red::RecordExists(Red::TweakDBID("itemsFactoryAppearanceSuffix.LegsState"));
+    const bool feetState = Red::RecordExists(Red::TweakDBID("itemsFactoryAppearanceSuffix.FeetState"));
+    LogInfo("[CP25 TweakDBProbe] {}: callbacks dispatched; custom records body={} arms={} legs={} feet={}.",
+            aStage, bodyType, armsState, legsState, feetState);
 }
 
 void App::ExtensionService::OnShutdown()
