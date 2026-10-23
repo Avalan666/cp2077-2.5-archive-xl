@@ -1,4 +1,6 @@
 #include "Extension.hpp"
+#include "App/Configuration.hpp"
+#include <atomic>
 #include "App/Extensions/Garment/Extension.hpp"
 #include "App/Extensions/ResourcePatch/Extension.hpp"
 #include "App/Utils/Str.hpp"
@@ -29,6 +31,13 @@ bool App::MeshExtension::Load()
     LogWarning("[CP25 Appearance] Mesh material loading hook unavailable on 2.5; mapped mesh hooks remain active.");
     Hook<Raw::CMesh::AddStubAppearance>(&OnAddStubAppearance).OrThrow();
     Hook<Raw::CMesh::ShouldPreloadAppearances>(&OnPreloadAppearances).OrThrow();
+    if (Config::Batch1("mesh"))
+    {
+        HookAfter<Raw::MeshAppearance::LoadMaterialSetupAsync>(&OnMaterialSetup).OrThrow();
+        LogInfo("[CP25 Batch1 A] MaterialSetup callback hooked; guarded appearance expansion enabled.");
+    }
+    else
+        LogInfo("[CP25 Batch1 A] Disabled.");
 
     s_dummyMesh = Red::MakeHandle<Red::CMesh>();
     s_dummyAppearance = Red::MakeHandle<Red::meshMeshAppearance>();
@@ -54,6 +63,8 @@ bool App::MeshExtension::Unload()
     // CMesh::LoadMaterialsAsync is not hooked on 2.5.
     Unhook<Raw::CMesh::AddStubAppearance>();
     Unhook<Raw::CMesh::ShouldPreloadAppearances>();
+    if (IsHooked<Raw::MeshAppearance::LoadMaterialSetupAsync>())
+        Unhook<Raw::MeshAppearance::LoadMaterialSetupAsync>();
 
     return true;
 }
@@ -187,20 +198,48 @@ bool App::MeshExtension::OnPreloadAppearances(Red::CMesh* aMesh)
 
     if (preload)
     {
-        return !HasMeshState(aMesh);
-
-        // if (auto meshState = FindMeshState(aMesh))
-        // {
-        //     std::unique_lock _(meshState->meshMutex);
-        //
-        //     for (const auto& appearance : aMesh->appearances)
-        //     {
-        //         ProcessAppearance(aMesh, meshState, appearance);
-        //     }
-        // }
+        if (auto meshState = FindMeshState(aMesh))
+        {
+            if (Config::Batch1("mesh"))
+            {
+                std::unique_lock _(meshState->meshMutex);
+                uint32_t expanded = 0;
+                for (const auto& appearance : aMesh->appearances)
+                {
+                    // Re-enter only for appearances that have no material slots;
+                    // avoid duplicating already-populated chunk/material arrays.
+                    if (appearance && appearance->chunkMaterials.IsEmpty())
+                    {
+                        ProcessAppearance(aMesh, meshState, appearance);
+                        ++expanded;
+                    }
+                }
+                if (expanded)
+                {
+                    static std::atomic<uint32_t> hits{0};
+                    if (++hits <= 8)
+                        LogInfo("[CP25 Batch1 A] Mesh hash={:#x}: attempted deferred expansion of {} empty appearances.",
+                                aMesh->path.hash, expanded);
+                }
+            }
+            return false;
+        }
+        return true;
     }
 
     return preload;
+}
+
+void App::MeshExtension::OnMaterialSetup(Red::mesh::MeshAppearance& aAppearance,
+                                         Red::Handle<Red::mesh::MeshAppearance>& aOut, uint8_t)
+{
+    static std::atomic<uint32_t> observed{0};
+    auto event = ++observed;
+    if (event <= 12)
+    {
+        LogInfo("[CP25 Batch1 A] MaterialSetup event={} appearance={:#x} chunks={} resolved={}.",
+                event, aAppearance.name.hash, aAppearance.chunkMaterials.Size(), static_cast<bool>(aOut));
+    }
 }
 
 void* App::MeshExtension::OnLoadMaterials(Red::CMesh* aTargetMesh, Red::MeshMaterialsToken& aToken,
