@@ -23,7 +23,9 @@ std::string_view App::CustomizationExtension::GetName()
 
 bool App::CustomizationExtension::Load()
 {
-    HookBefore<Raw::CharacterCustomizationSystem::Initialize>(&CustomizationExtension::OnActivateSystem).OrThrow();
+    // CP2.5: CharacterCustomizationSystem::Initialize is unmapped. Other
+    // initialization/resource hooks are kept; m_customizationActive defaults false.
+    LogWarning("[CP25 Extended] Character customization activation hook missing; other customization hooks active.");
     HookBefore<Raw::CharacterCustomizationSystem::Uninitialize>(&CustomizationExtension::OnDeactivateSystem).OrThrow();
     HookBefore<Raw::CharacterCustomizationSystem::GetResource>(&CustomizationExtension::OnPrepareResource).OrThrow();
     HookBefore<Raw::CharacterCustomizationSystem::InitializeAppOption>(&CustomizationExtension::OnInitAppOption).OrThrow();
@@ -48,7 +50,7 @@ void App::CustomizationExtension::OnDepotReady()
 
 bool App::CustomizationExtension::Unload()
 {
-    Unhook<Raw::CharacterCustomizationSystem::Initialize>();
+    // CharacterCustomizationSystem::Initialize is not hooked on 2.5.
     Unhook<Raw::CharacterCustomizationSystem::Uninitialize>();
     Unhook<Raw::CharacterCustomizationSystem::GetResource>();
     Unhook<Raw::CharacterCustomizationSystem::InitializeAppOption>();
