@@ -30,12 +30,12 @@ App::Application::Application(HMODULE aHandle, const RED4ext::v1::Sdk* aSdk)
         ->RegisterScripts(Env::ScriptsDir());
     // CP2.5 loader probe: deliberately do not bootstrap the legacy archive
     // loader, extension hooks, or patches with unresolved address hashes.
-    Register<App::ArchiveProbe>();
+    Register<App::ArchiveProbe>(Env::BundleDir());
 }
 
 void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 Probe] Diagnostic build: no migration cleanup, archive loading, or extensions.");
+    LogInfo("[CP25 Inject] Experimental archive injection; legacy extensions and patches remain disabled.");
 }
