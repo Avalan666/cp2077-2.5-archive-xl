@@ -47,7 +47,7 @@ void App::ExtensionService::OnBootstrap()
     m_loader->Add<AnimationExtension>();
     m_loader->Add<QuestPhaseExtension>();
     m_loader->Add<WorldStreamingExtension>();
-    LogInfo("[CP25 WorldProbe] Stage 4 plus read-only WorldStreaming observer (world changes disabled).");
+    LogInfo("[CP25 WorldGuard] Stage 4 plus guarded WorldStreaming sector changes (element edits and world blocks disabled).");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
