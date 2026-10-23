@@ -302,15 +302,15 @@ void* App::GarmentExtension::OnResolveSuffixes(Red::CString& aResult,
             aResult = {};
         }
         if (event && event <= 12)
-            LogInfo("[CP25 Batch1 B] Suffix event={} dynamic=true item={:#x} owner={} result='{}'.",
-                    event, aItemID.tdbid.hash, static_cast<bool>(aOwner), aResult.c_str());
+            LogInfo("[CP25 Batch1 B] Suffix event={} dynamic=true owner={} result='{}'.",
+                    event, static_cast<bool>(aOwner), aResult.c_str());
         return &aResult;
     }
 
     auto result = Raw::AppearanceChanger::GetSuffixes(aResult, aOwner, aOwnerOverride, aItemRecord, aItemID);
     if (event && event <= 12)
-        LogInfo("[CP25 Batch1 B] Suffix event={} dynamic=false item={:#x} owner={} result='{}'.",
-                event, aItemID.tdbid.hash, static_cast<bool>(aOwner), aResult.c_str());
+        LogInfo("[CP25 Batch1 B] Suffix event={} dynamic=false owner={} result='{}'.",
+                event, static_cast<bool>(aOwner), aResult.c_str());
     return result;
 }
 
