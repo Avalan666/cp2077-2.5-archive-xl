@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 Appearance] Restored Garment and mapped Mesh/Attachment/PuppetState hooks; ResourcePatch and WorldStreaming retained.");
+    LogInfo("[CP25 Extended] Restored mapped Journal, Customization and synchronous InkSpawner hooks.");
 }
