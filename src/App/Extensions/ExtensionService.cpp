@@ -57,9 +57,32 @@ void App::ExtensionService::OnBootstrap()
         m_loader->OnDepotReady();
     });
 
-    // TweakDB_Load is absent from the 2.5 address library. PuppetState remains
-    // partial until its OnTweakDBReady suffix registration can be scheduled.
-    LogWarning("[CP25 Appearance] TweakDB-ready callback unavailable; PuppetState suffix records not yet registered.");
+    // CP2.5 no longer maps TweakDB_Load. The engine-init completion hook
+    // is mapped and also used by InkSpawner. The appearance-suffix list is a
+    // concrete indication that TweakDB records have been loaded.
+    HookOnceAfter<Raw::CBaseEngine::InitEngine>([&]() {
+        if (!m_loader)
+            return;
+
+        const auto* db = Red::TweakDB::Get();
+        if (!db)
+        {
+            LogWarning("[CP25 TweakDB] Engine initialized but TweakDB is unavailable; suffix records not installed.");
+            return;
+        }
+
+        constexpr auto suffixList = Red::TweakDBID(
+            "itemsFactoryAppearanceSuffix.ItemsFactoryAppearanceSuffixOrderDefault");
+        if (!Red::RecordExists(suffixList))
+        {
+            LogWarning("[CP25 TweakDB] Appearance suffix ordering record absent at engine init; no suffix changes made.");
+            return;
+        }
+
+        LogInfo("[CP25 TweakDB] Existing appearance-suffix list found; restoring registered TweakDB extension changes.");
+        m_loader->OnTweakDBReady();
+        LogInfo("[CP25 TweakDB] TweakDB extension changes applied.");
+    });
 }
 
 void App::ExtensionService::OnShutdown()
