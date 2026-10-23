@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 JournalDepot] Restore Journal merging from depot-ready resource requests.");
+    LogInfo("[CP25 TweakDB] Restore PuppetState appearance suffix records after engine initialization.");
 }
