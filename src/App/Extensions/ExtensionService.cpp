@@ -1,4 +1,5 @@
 #include "ExtensionService.hpp"
+#include "App/Configuration.hpp"
 #include "App/Extensions/Animation/Extension.hpp"
 #include "App/Extensions/Attachment/Extension.hpp"
 #include "App/Extensions/Customization/Extension.hpp"
@@ -32,6 +33,7 @@ void App::ExtensionService::OnBootstrap()
     // CP2.5: restore modules with available engine hooks; the resource
     // serializer post-processing stage uses OnResourceReady.
     m_loader->Add<ResourceMetaExtension>();
+    m_loader->Add<FactoryIndexExtension>();
     m_loader->Add<ResourceLinkExtension>();
     m_loader->Add<ResourcePatchExtension>();
     m_loader->Add<MeshExtension>();
@@ -46,6 +48,9 @@ void App::ExtensionService::OnBootstrap()
     m_loader->Add<QuestPhaseExtension>();
     m_loader->Add<WorldStreamingExtension>();
     m_loader->Add<InkSpawnerExtension>();
+    LogInfo("[CP25 Batch1] mesh={} suffix={} customization={} factory={} (ArchiveXL.yaml batch1 switches).",
+            Config::Batch1("mesh"), Config::Batch1("suffix"),
+            Config::Batch1("customization"), Config::Batch1("factory"));
     LogInfo("[CP25 JournalDepot] Journal resource requests moved to depot-ready phase; Customization and InkSpawner retained.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
