@@ -1,6 +1,7 @@
 #include "Extension.hpp"
 #include "App/Extensions/ResourcePatch/Extension.hpp"
 #include "Red/CommunitySystem.hpp"
+#include <atomic>
 
 namespace
 {
@@ -25,22 +26,20 @@ std::string_view App::WorldStreamingExtension::GetName()
     return ExtensionName;
 }
 
+// CP2.5 staged port: DO NOT call PatchSector or modify AIWorkspotManager
+// until the 2.5 StreamingSector node buffer and workspot offsets are verified.
+// This stage attaches only a read-only sector load observer.
 bool App::WorldStreamingExtension::Load()
 {
+    LogInfo("[CP25 WorldProbe] Installing read-only StreamingSector::PostLoad observer.");
     HookAfter<Raw::StreamingSector::PostLoad>(&OnSectorPostLoad).OrThrow();
-    Hook<Raw::AIWorkspotManager::RegisterSpots>(&OnRegisterSpots).OrThrow();
-
-    s_dummyNode = Red::MakeHandle<Red::worldStaticMeshNode>();
-    s_dummyNode->isVisibleInGame = false;
-
+    LogInfo("[CP25 WorldProbe] Sector observer installed; world modification remains disabled.");
     return true;
 }
 
 bool App::WorldStreamingExtension::Unload()
 {
     Unhook<Raw::StreamingSector::PostLoad>();
-    Unhook<Raw::AIWorkspotManager::RegisterSpots>();
-
     return true;
 }
 
@@ -98,58 +97,60 @@ void App::WorldStreamingExtension::Configure()
 
         unit.sectors.clear();
     }
+    uint32_t configured = 0;
+    for (const auto& entry : s_sectors)
+        configured += static_cast<uint32_t>(entry.second.size());
+
+    LogInfo("[CP25 WorldProbe] Accepted {} streaming sector definitions targeting {} unique sector resources.",
+            configured, s_sectors.size());
 }
 
 void App::WorldStreamingExtension::PostConfigure()
 {
-    // ResourcePatchExtension::ClearTarget(MainWorldResource);
+    // streaming.blocks requires ResourcePatch::OnDependenciesReady, absent in
+    // the 2.5 address library. Do not register these writes while incomplete.
+    uint32_t blockCount = 0;
+    for (const auto& unit : m_configs)
+        blockCount += static_cast<uint32_t>(unit.blocks.size());
 
-    for (auto& unit : m_configs)
-    {
-        for (auto& blockPathStr : unit.blocks)
-        {
-            ResourcePatchExtension::RegisterPatch(MainWorldResource, blockPathStr.data());
-        }
-
-        unit.blocks.clear();
-    }
+    LogInfo("[CP25 WorldProbe] {} streaming world block patches deferred until OnDependenciesReady is ported.",
+            blockCount);
 }
 
 void App::WorldStreamingExtension::OnSectorPostLoad(Red::world::StreamingSector* aSector, uint64_t)
 {
+    static std::atomic<uint32_t> total{0};
+    static std::atomic<uint32_t> matching{0};
+    const auto observed = ++total;
+    if (!aSector)
+    {
+        LogWarning("[CP25 WorldProbe] PostLoad callback received null sector pointer.");
+        return;
+    }
+
+    if (observed <= 4)
+        LogInfo("[CP25 WorldProbe] PostLoad event {} sector={:#x} resource-hash={:#x}",
+                observed, reinterpret_cast<uintptr_t>(aSector), aSector->path.hash);
+
     std::shared_lock _(s_sectorsLock);
-
     const auto& sectorMods = s_sectors.find(aSector->path);
-
     if (sectorMods == s_sectors.end())
         return;
 
-    const auto& sectorPath = sectorMods.value().begin()->path;
-    auto patchedAny = false;
-    auto successAll = true;
+    const auto matchNumber = ++matching;
+    if (matchNumber > 32)
+        return;
 
-    LogInfo("[{}] Patching sector \"{}\"...", ExtensionName, sectorPath);
-
+    // This is a read-only ABI probe. The old node buffer offset (0x40) is
+    // deliberately NOT used for writes here. Only compare metadata.
+    const auto& buffer = Raw::StreamingSector::NodeBuffer::Ref(aSector);
+    const auto foundNodes = buffer.nodeSetups.GetInstanceCount();
     for (const auto& sectorMod : sectorMods.value())
     {
-        LogInfo("[{}] Applying changes from \"{}\"...", ExtensionName, sectorMod.mod);
-
-        if (PatchSector(aSector, sectorMod))
-        {
-            patchedAny = true;
-        }
-        else
-        {
-            successAll = false;
-        }
+        LogInfo("[CP25 WorldProbe] Matching sector '{}' expected-nodes={} observed-nodes={} matching-layout={}",
+                sectorMod.path, sectorMod.expectedNodes, foundNodes,
+                foundNodes == sectorMod.expectedNodes);
     }
-
-    if (successAll)
-        LogInfo("[{}] All patches have been applied to \"{}\".", ExtensionName, sectorPath);
-    else if (patchedAny)
-        LogWarning("[{}] Some patches have not been applied to \"{}\".", ExtensionName, sectorPath);
-    else
-        LogWarning("[{}] No patches have been applied to \"{}\".", ExtensionName, sectorPath);
 }
 
 bool App::WorldStreamingExtension::PatchSector(Red::world::StreamingSector* aSector,
