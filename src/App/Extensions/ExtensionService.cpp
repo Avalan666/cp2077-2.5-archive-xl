@@ -29,22 +29,12 @@ void App::ExtensionService::OnBootstrap()
 {
     m_loader = Core::MakeUnique<ExtensionLoader>(m_bundleDir, L".xl");
 
+    // Stage 1: these modules use address IDs present in the 2.5 library.
+    // Other modules are disabled until their missing hooks and ABI are ported.
     m_loader->Add<ResourceMetaExtension>();
-    m_loader->Add<ResourceLinkExtension>();
-    m_loader->Add<ResourcePatchExtension>();
-    m_loader->Add<MeshExtension>();
-    m_loader->Add<FactoryIndexExtension>();
     m_loader->Add<LocalizationExtension>();
-    m_loader->Add<JournalExtension>();
-    m_loader->Add<AnimationExtension>();
     m_loader->Add<TransmogExtension>();
-    m_loader->Add<AttachmentExtension>();
-    m_loader->Add<CustomizationExtension>();
-    m_loader->Add<GarmentExtension>();
-    m_loader->Add<PuppetStateExtension>();
-    m_loader->Add<QuestPhaseExtension>();
-    m_loader->Add<WorldStreamingExtension>();
-    m_loader->Add<InkSpawnerExtension>();
+    LogInfo("[CP25 Stage1] Enabled ResourceMeta, Localization and Transmog only.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
@@ -55,9 +45,8 @@ void App::ExtensionService::OnBootstrap()
         m_loader->OnDepotReady();
     });
 
-    HookAfter<Raw::LoadTweakDB>([&]() {
-        m_loader->OnTweakDBReady();
-    });
+    // TweakDB_Load is absent from the 2.5 address library. Do not attach.
+    LogWarning("[CP25 Stage1] TweakDB-ready callback disabled pending a verified 2.5 hook.");
 }
 
 void App::ExtensionService::OnShutdown()
