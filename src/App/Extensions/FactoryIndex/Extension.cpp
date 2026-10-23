@@ -1,4 +1,6 @@
 #include "Extension.hpp"
+#include "App/Configuration.hpp"
+#include <atomic>
 #include "Core/Facades/Container.hpp"
 #include "Red/FactoryIndex.hpp"
 
@@ -15,7 +17,15 @@ std::string_view App::FactoryIndexExtension::GetName()
 
 bool App::FactoryIndexExtension::Load()
 {
-    HookAfter<Raw::FactoryIndex::LoadFactoryAsync>(&OnLoadFactoryAsync).OrThrow();
+    if (Config::Batch1("factory"))
+    {
+        // This mapped method is also used by Transmog. Observe its context
+        // rather than hooking the unavailable LoadFactoryAsync address.
+        HookAfter<Raw::FactoryIndex::ResolveResource>(&OnResolveResource).OrThrow();
+        LogInfo("[CP25 Batch1 D] ResolveResource probe installed.");
+    }
+    else
+        LogInfo("[CP25 Batch1 D] Disabled.");
 
     s_resourcePathRegistry = Core::Resolve<ResourcePathRegistry>();
 
@@ -24,7 +34,8 @@ bool App::FactoryIndexExtension::Load()
 
 bool App::FactoryIndexExtension::Unload()
 {
-    Unhook<Raw::FactoryIndex::LoadFactoryAsync>();
+    if (IsHooked<Raw::FactoryIndex::ResolveResource>())
+        Unhook<Raw::FactoryIndex::ResolveResource>();
 
     return true;
 }
@@ -32,6 +43,8 @@ bool App::FactoryIndexExtension::Unload()
 void App::FactoryIndexExtension::Configure()
 {
     s_factories.clear();
+    if (!Config::Batch1("factory"))
+        return;
 
     auto depot = Red::ResourceDepot::Get();
 
@@ -62,9 +75,21 @@ void App::FactoryIndexExtension::Configure()
         s_resourcePathRegistry->RegisterPath(knownPath, knownPathStr);
     }
 
+    LogInfo("[CP25 Batch1 D] {} valid mod factories configured; async injection is not restored yet.",
+            s_factories.size());
     m_configs.clear();
 }
 
+void App::FactoryIndexExtension::OnResolveResource(uintptr_t, Red::ResourcePath& aPath, Red::CName aName)
+{
+    static std::atomic<uint32_t> observed{0};
+    auto event = ++observed;
+    if (event <= 12)
+        LogInfo("[CP25 Batch1 D] ResolveResource event={} name={:#x} resolvedHash={:#x} configuredFactories={}.",
+                event, aName.hash, aPath.hash, s_factories.size());
+}
+
+#if 0 // The 2.5 address for LoadFactoryAsync is not mapped; retain original implementation for later porting.
 void App::FactoryIndexExtension::OnLoadFactoryAsync(uintptr_t aIndex, Red::ResourcePath aPath, uintptr_t aContext)
 {
     if (aPath != LastFactory)
@@ -88,3 +113,5 @@ void App::FactoryIndexExtension::OnLoadFactoryAsync(uintptr_t aIndex, Red::Resou
         LogInfo("[{}] No factories to load.", ExtensionName);
     }
 }
+
+#endif
