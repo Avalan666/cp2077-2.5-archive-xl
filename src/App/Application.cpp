@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 Stage1] Experimental archive injection and limited XL extensions enabled. Legacy patches remain disabled.");
+    LogInfo("[CP25 Stage3] Experimental archive injection, resource linking and selected XL extensions enabled. Legacy patches remain disabled.");
 }
