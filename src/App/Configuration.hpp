@@ -14,6 +14,14 @@ public:
         return s_config["logging"]["debug"].as<bool>(false);
     }
 
+    // Experimental CP2.5 batch switches. The four experiments default to on.
+    // Turning one off changes ONLY its batch-specific code, not stable modules.
+    static inline bool Batch1(const char* aExperiment)
+    {
+        Load();
+        return s_config["batch1"][aExperiment].as<bool>(true);
+    }
+
 private:
     static inline void Load()
     {
