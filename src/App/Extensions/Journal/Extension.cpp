@@ -25,22 +25,24 @@ std::string_view App::JournalExtension::GetName()
 
 bool App::JournalExtension::Load()
 {
-    HookBefore<Raw::JournalTree::ProcessJournalIndex>(&JournalExtension::OnLoadJournal).OrThrow();
+    // CP2.5: JournalTree::ProcessJournalIndex is not mapped; source resources
+    // are loaded at the journal root initialization callback instead.
     HookBefore<Raw::JournalRootFolderEntry::Initialize>(&JournalExtension::OnInitializeRoot).OrThrow();
     HookAfter<Raw::MappinSystem::OnStreamingWorldLoaded>(&JournalExtension::OnMappinDataLoaded).OrThrow();
     Hook<Raw::MappinSystem::GetMappinData>(&JournalExtension::OnGetMappinData).OrThrow();
-    Hook<Raw::MappinSystem::GetPoiData>(&JournalExtension::OnGetPoiData).OrThrow();
+    // CP2.5: MappinSystem::GetPoiData is unmapped; POI lookups remain native.
+    LogWarning("[CP25 Extended] Journal POI-specific data hook unavailable; standard journal merging and mappins enabled.");
 
     return true;
 }
 
 bool App::JournalExtension::Unload()
 {
-    Unhook<Raw::JournalTree::ProcessJournalIndex>();
+    // JournalTree::ProcessJournalIndex is not hooked on 2.5.
     Unhook<Raw::JournalRootFolderEntry::Initialize>();
     Unhook<Raw::MappinSystem::OnStreamingWorldLoaded>();
     Unhook<Raw::MappinSystem::GetMappinData>();
-    Unhook<Raw::MappinSystem::GetPoiData>();
+    // MappinSystem::GetPoiData is not hooked on 2.5.
 
     return true;
 }
@@ -92,6 +94,26 @@ void App::JournalExtension::OnInitializeRoot(Red::game::JournalRootFolderEntry* 
 
     if (m_configs.empty())
         return;
+
+    // In CP2.5 the old journal-index callback is unmapped. Load additional
+    // journal resources here, using the hook's existing job queue for waits.
+    // The engine invokes this hook before it initializes the root folder.
+    if (s_resources.empty())
+    {
+        auto loader = Red::ResourceLoader::Get();
+        for (const auto& unit : m_configs)
+        {
+            for (const auto& path : unit.journals)
+            {
+                auto token = loader->LoadAsync<Red::game::JournalResource>(path.c_str());
+                if (!token->IsLoaded())
+                    aJobQueue.Wait(token->job);
+                s_resources.emplace_back(token);
+                s_paths.emplace(token->path, path);
+            }
+        }
+        LogInfo("[CP25 Extended] Journal resource loading moved to root initialization; {} configured resources.", s_resources.size());
+    }
 
     auto successAll = true;
     auto mergedAny = false;
