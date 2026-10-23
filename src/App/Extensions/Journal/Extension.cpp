@@ -57,16 +57,22 @@ void App::JournalExtension::Reload()
     }
 }
 
-void App::JournalExtension::PostConfigure()
+void App::JournalExtension::OnDepotReady()
 {
-    // CP2.5: Prefetch mod journals during ArchiveXL configuration, before
-    // the engine begins initializing the journal tree. Never block the
-    // journal's own initialization job on a newly requested resource.
+    // CP2.5: The resource loader is not available at PostConfigure time.
+    // OnDepotReady runs after LoadGatheredResources, and before normal
+    // journal-root loading. Request journal resources without blocking here.
     ResetResourceData();
     if (m_configs.empty())
         return;
 
     auto loader = Red::ResourceLoader::Get();
+    if (!loader)
+    {
+        LogWarning("[CP25 JournalDepot] ResourceLoader is not ready at depot callback; journal merges skipped.");
+        return;
+    }
+
     for (const auto& unit : m_configs)
     {
         for (const auto& path : unit.journals)
@@ -74,14 +80,14 @@ void App::JournalExtension::PostConfigure()
             auto token = loader->LoadAsync<Red::game::JournalResource>(path.c_str());
             if (!token)
             {
-                LogWarning("[CP25 JournalFix] Failed to request journal resource '{}'.", path);
+                LogWarning("[CP25 JournalDepot] Failed to request journal resource '{}'.", path);
                 continue;
             }
             s_resources.emplace_back(token);
             s_paths.emplace(token->path, path);
         }
     }
-    LogInfo("[CP25 JournalFix] Prefetched {} journal resources before journal initialization.", s_resources.size());
+    LogInfo("[CP25 JournalDepot] Requested {} additional journal resources at depot-ready stage.", s_resources.size());
 }
 
 
@@ -90,12 +96,11 @@ void App::JournalExtension::OnInitializeRoot(Red::game::JournalRootFolderEntry* 
 {
     static const auto s_rootEntryType = Red::GetClass<Red::game::JournalRootFolderEntry>();
 
-    if (m_configs.empty())
+    if (m_configs.empty() || !aJournalRoot || !s_rootEntryType)
         return;
 
-    // Resources were requested by PostConfigure. If a request is still
-    // outstanding, skip it rather than blocking the journal initializer.
-    // On CP2.5 the old late-load path crashed with a null dereference.
+    // Resource requests were initiated by OnDepotReady. A journal resource
+    // must be fully loaded before its entries can be merged; never wait here.
     auto successAll = true;
     auto mergedAny = false;
 
@@ -103,7 +108,7 @@ void App::JournalExtension::OnInitializeRoot(Red::game::JournalRootFolderEntry* 
     {
         if (!resource || !resource->IsLoaded())
         {
-            LogWarning("[CP25 JournalFix] Skipping an unfinished journal resource during root initialization.");
+            LogWarning("[CP25 JournalDepot] Skipping an unfinished journal resource during root initialization.");
             successAll = false;
             continue;
         }
@@ -118,7 +123,7 @@ void App::JournalExtension::OnInitializeRoot(Red::game::JournalRootFolderEntry* 
         const auto& journal = resource->Get();
         if (!journal)
         {
-            LogWarning("[CP25 JournalFix] Loaded journal resource has no root object; skipping.");
+            LogWarning("[CP25 JournalDepot] Loaded journal resource has no root object; skipping.");
             successAll = false;
             continue;
         }
@@ -126,7 +131,7 @@ void App::JournalExtension::OnInitializeRoot(Red::game::JournalRootFolderEntry* 
         auto root = journal->entry.GetPtr<Red::game::JournalContainerEntry>();
         if (!root)
         {
-            LogWarning("[CP25 JournalFix] Loaded journal resource has null entry; skipping.");
+            LogWarning("[CP25 JournalDepot] Loaded journal resource has null entry; skipping.");
             successAll = false;
             continue;
         }
