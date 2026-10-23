@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 WorldLayout] Read-only streaming sector node-buffer metadata validation; no world mutations.");
+    LogInfo("[CP25 WorldGuard] Guarded sector changes enabled; element edits and world blocks remain disabled.");
 }
