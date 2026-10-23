@@ -9,6 +9,7 @@
 #include "Red/MorphTarget.hpp"
 #include "Red/PersistencySystem.hpp"
 #include "Red/StreamingWorld.hpp"
+#include <atomic>
 
 namespace
 {
@@ -57,6 +58,11 @@ bool App::ResourcePatchExtension::Load()
     // This disables CurveSet, DeviceResource, StreamingWorld and InkAnimation
     // post-dependency callbacks; the other mapped hooks remain available.
     LogWarning("[CP25 Stage4] ResourcePatch OnDependenciesReady callback disabled; corresponding resource types will not be post-processed.");
+    // OnResourceReady has its own mapped engine function. Observe this
+    // stage to determine whether it can replace the missing callback.
+    // This probe does NOT modify resource state.
+    HookBefore<Raw::ResourceSerializer::OnResourceReady>(&ProbeResourceReady).OrThrow();
+    LogInfo("[CP25 SerializerProbe] Attached read-only ResourceSerializer::OnResourceReady observer.");
     HookBefore<Raw::EntityTemplate::PostLoad>(&OnEntityTemplateLoad).OrThrow();
     HookBefore<Raw::AppearanceResource::PostLoad>(&OnAppearanceResourceLoad).OrThrow();
     HookBefore<Raw::CMesh::PostLoad>(&OnMeshResourceLoad).OrThrow();
@@ -77,6 +83,7 @@ bool App::ResourcePatchExtension::Unload()
     Unhook<Raw::ResourceSerializer::Load>();
     Unhook<Raw::ResourceSerializer::Deserialize>();
     // No OnDependenciesReady hook is installed on 2.5.
+    Unhook<Raw::ResourceSerializer::OnResourceReady>();
     Unhook<Raw::EntityTemplate::PostLoad>();
     Unhook<Raw::AppearanceResource::PostLoad>();
     Unhook<Raw::CMesh::PostLoad>();
@@ -209,6 +216,30 @@ void App::ResourcePatchExtension::OnResourceDeserialize(void* aSerializer, uint6
             aJob.Join(patchToken->job);
         }
     }
+}
+
+void App::ResourcePatchExtension::ProbeResourceReady(Red::ResourceSerializerContext* aContext)
+{
+    static std::atomic<uint32_t> calls{0};
+    const auto n = ++calls;
+    if (n > 64)
+        return;
+
+    if (!aContext)
+    {
+        LogWarning("[CP25 SerializerProbe] call={} context=null", n);
+        return;
+    }
+
+    // The existing SDK defines the serializables DynArray at offset 0x230.
+    // Read only scalar metadata, avoiding traversal until its layout is
+    // validated against live observations. These values are diagnostic.
+    const auto count = aContext->serializables.Size();
+    const auto data = reinterpret_cast<uintptr_t>(aContext->serializables.Data());
+    const bool plausible = count <= 100000 && (count == 0 || data != 0);
+    LogInfo("[CP25 SerializerProbe] call={} context={:#x} pathHash={:#x} serializableCount={} data={:#x} plausible={}",
+            n, reinterpret_cast<uintptr_t>(aContext), aContext->request.path.hash,
+            count, data, plausible);
 }
 
 void App::ResourcePatchExtension::OnResourceReady(Red::ResourceSerializerContext* aContext)
