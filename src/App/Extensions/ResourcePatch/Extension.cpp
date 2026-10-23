@@ -50,9 +50,13 @@ std::string_view App::ResourcePatchExtension::GetName()
 
 bool App::ResourcePatchExtension::Load()
 {
+    LogInfo("[CP25 Stage4] ResourcePatch: installing mapped native hooks (OnDependenciesReady omitted).");
     HookBefore<Raw::ResourceSerializer::Load>(&OnResourceRequest).OrThrow();
     HookBefore<Raw::ResourceSerializer::Deserialize>(&OnResourceDeserialize).OrThrow();
-    HookBefore<Raw::ResourceSerializer::OnDependenciesReady>(&OnResourceReady).OrThrow();
+    // CP2.5: ResourceSerializer_OnDependenciesReady hash is not mapped.
+    // This disables CurveSet, DeviceResource, StreamingWorld and InkAnimation
+    // post-dependency callbacks; the other mapped hooks remain available.
+    LogWarning("[CP25 Stage4] ResourcePatch OnDependenciesReady callback disabled; corresponding resource types will not be post-processed.");
     HookBefore<Raw::EntityTemplate::PostLoad>(&OnEntityTemplateLoad).OrThrow();
     HookBefore<Raw::AppearanceResource::PostLoad>(&OnAppearanceResourceLoad).OrThrow();
     HookBefore<Raw::CMesh::PostLoad>(&OnMeshResourceLoad).OrThrow();
@@ -63,6 +67,7 @@ bool App::ResourcePatchExtension::Load()
     HookAfter<Raw::PersistencySystem::SetPersistentStateData>(&OnSetPersistentStateData).OrThrow();
 
     s_resourcePathRegistry = Core::Resolve<ResourcePathRegistry>();
+    LogInfo("[CP25 Stage4] ResourcePatch: mapped hooks attached.");
 
     return true;
 }
@@ -71,7 +76,7 @@ bool App::ResourcePatchExtension::Unload()
 {
     Unhook<Raw::ResourceSerializer::Load>();
     Unhook<Raw::ResourceSerializer::Deserialize>();
-    Unhook<Raw::ResourceSerializer::OnDependenciesReady>();
+    // No OnDependenciesReady hook is installed on 2.5.
     Unhook<Raw::EntityTemplate::PostLoad>();
     Unhook<Raw::AppearanceResource::PostLoad>();
     Unhook<Raw::CMesh::PostLoad>();
@@ -167,6 +172,8 @@ void App::ResourcePatchExtension::Configure()
         s_resourcePathRegistry->RegisterPath(knownPath, knownPathStr);
     }
 
+    LogInfo("[CP25 Stage4] ResourcePatch configured: {} patch sources, {} target entries.",
+            s_patches.size(), s_targetPatches.size());
     m_configs.clear();
 }
 
