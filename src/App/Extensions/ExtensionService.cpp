@@ -29,12 +29,17 @@ void App::ExtensionService::OnBootstrap()
 {
     m_loader = Core::MakeUnique<ExtensionLoader>(m_bundleDir, L".xl");
 
-    // Stage 1: these modules use address IDs present in the 2.5 library.
-    // Other modules are disabled until their missing hooks and ABI are ported.
+    // Stage 2: extend the tested localization/transmog subset with the
+    // animation and quest-phase modules. Their function IDs are still mapped
+    // on 2.5; their C++ object layouts remain under runtime validation.
+    // Modules with missing IDs (mesh, resource patch, customization, etc.)
+    // remain disabled.
     m_loader->Add<ResourceMetaExtension>();
     m_loader->Add<LocalizationExtension>();
     m_loader->Add<TransmogExtension>();
-    LogInfo("[CP25 Stage1] Enabled ResourceMeta, Localization and Transmog only.");
+    m_loader->Add<AnimationExtension>();
+    m_loader->Add<QuestPhaseExtension>();
+    LogInfo("[CP25 Stage2] Enabled ResourceMeta, Localization, Transmog, Animation and QuestPhase.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
@@ -46,7 +51,7 @@ void App::ExtensionService::OnBootstrap()
     });
 
     // TweakDB_Load is absent from the 2.5 address library. Do not attach.
-    LogWarning("[CP25 Stage1] TweakDB-ready callback disabled pending a verified 2.5 hook.");
+    LogWarning("[CP25 Stage2] TweakDB-ready callback disabled pending a verified 2.5 hook.");
 }
 
 void App::ExtensionService::OnShutdown()
