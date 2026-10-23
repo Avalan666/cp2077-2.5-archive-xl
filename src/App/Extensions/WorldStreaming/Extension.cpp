@@ -29,17 +29,25 @@ std::string_view App::WorldStreamingExtension::GetName()
 // CP2.5 staged port: DO NOT call PatchSector or modify AIWorkspotManager
 // until the 2.5 StreamingSector node buffer and workspot offsets are verified.
 // This stage attaches only a read-only sector load observer.
+// CP2.5 staged port: guarded sector edits only. The AIWorkspotManager offset
+// and the OnDependenciesReady hook are not validated and stay disabled.
 bool App::WorldStreamingExtension::Load()
 {
-    LogInfo("[CP25 WorldProbe] Installing read-only StreamingSector::PostLoad observer.");
+    LogInfo("[CP25 WorldGuard] Installing StreamingSector::PostLoad hook.");
     HookAfter<Raw::StreamingSector::PostLoad>(&OnSectorPostLoad).OrThrow();
-    LogInfo("[CP25 WorldProbe] Sector observer installed; world modification remains disabled.");
+
+    // Original WorldStreaming used this replacement when deleting nodes.
+    s_dummyNode = Red::MakeHandle<Red::worldStaticMeshNode>();
+    s_dummyNode->isVisibleInGame = false;
+
+    LogInfo("[CP25 WorldGuard] Guarded sector edits active; element edits, workspot writes and world blocks disabled.");
     return true;
 }
 
 bool App::WorldStreamingExtension::Unload()
 {
     Unhook<Raw::StreamingSector::PostLoad>();
+    s_dummyNode = {};
     return true;
 }
 
@@ -124,58 +132,105 @@ void App::WorldStreamingExtension::OnSectorPostLoad(Red::world::StreamingSector*
     const auto observed = ++total;
     if (!aSector)
     {
-        LogWarning("[CP25 WorldLayout] PostLoad callback received null sector pointer.");
+        LogWarning("[CP25 WorldGuard] PostLoad callback received null sector pointer.");
         return;
     }
 
-    const auto pathHash = aSector->path.hash;
     std::shared_lock _(s_sectorsLock);
     const auto& sectorMods = s_sectors.find(aSector->path);
     const bool isTarget = sectorMods != s_sectors.end();
 
-    // Inspect the existing SDK's 0x40 node-buffer interpretation, without
-    // dereferencing its stored node pointers or modifying anything. Only
-    // compare scalar metadata: payload byte count, 0x90-byte setup stride,
-    // setup data address and node definition count.
     if (observed > 24 && !isTarget)
         return;
 
-    if (isTarget && ++matching > 40)
-        return;
-
-    const auto& candidate = Raw::StreamingSector::NodeBuffer::Ref(aSector);
+    const auto& buffer = Raw::StreamingSector::NodeBuffer::Ref(aSector);
     constexpr auto stride = sizeof(Red::CompiledNodeInstanceSetupInfo);
-    const auto setupBytes = candidate.nodeSetups.buffer.size;
-    const auto setupData = reinterpret_cast<uintptr_t>(candidate.nodeSetups.buffer.data);
-    const auto definitions = candidate.nodes.Size();
-    const bool divisible = (setupBytes % stride == 0);
-    const auto setups = setupBytes / stride;
-    const bool plausible = divisible && setupBytes <= 64u * 1024u * 1024u &&
-                           setups <= 250000u && definitions <= 250000u &&
-                           (setupBytes == 0 || setupData != 0);
+    const auto bytes = buffer.nodeSetups.buffer.size;
+    const auto setupPtr = reinterpret_cast<uintptr_t>(buffer.nodeSetups.buffer.data);
+    const auto definitions = buffer.nodes.Size();
+    const bool plausible = bytes % stride == 0 && bytes <= 64u * 1024u * 1024u &&
+                           (bytes == 0 || setupPtr != 0) &&
+                           definitions > 0 && definitions <= 250000u &&
+                           buffer.nodes.Data() != nullptr;
 
     if (!plausible)
     {
-        LogWarning("[CP25 WorldLayout] event={} hash={:#x} target={} candidate-offset=0x40 looks INVALID: setupBytes={} setupData={:#x} nodeDefinitions={} stride={}",
-                   observed, pathHash, isTarget, setupBytes, setupData,
-                   definitions, stride);
+        LogWarning("[CP25 WorldGuard] event={} hash={:#x} target={} REJECTED implausible buffer: bytes={} definitions={}",
+                   observed, aSector->path.hash, isTarget, bytes, definitions);
         return;
     }
 
-    if (observed <= 24 || isTarget)
+    const auto setups = bytes / stride;
+    if (observed <= 24)
     {
-        LogInfo("[CP25 WorldLayout] event={} hash={:#x} target={} candidate-offset=0x40 setupBytes={} setupCount={} nodeDefinitions={} setupData={:#x}",
-                observed, pathHash, isTarget, setupBytes, setups, definitions, setupData);
+        LogInfo("[CP25 WorldGuard] event={} hash={:#x} target={} setupCount={} nodeDefinitions={}",
+                observed, aSector->path.hash, isTarget, setups, definitions);
     }
 
     if (!isTarget)
         return;
 
-    for (const auto& sectorMod : sectorMods.value())
+    const auto matched = ++matching;
+    if (matched <= 40)
     {
-        LogInfo("[CP25 WorldLayout] Matched '{}' expectedSetups={} observedSetups={} countMatches={}",
-                sectorMod.path, sectorMod.expectedNodes, setups,
-                sectorMod.expectedNodes == setups);
+        LogInfo("[CP25 WorldGuard] Matched configured sector hash={:#x}, {} candidate patches.",
+                aSector->path.hash, sectorMods.value().size());
+    }
+
+    // Validate *every* referenced node and its definition index before
+    // entering the existing PatchSector logic. This test is deliberately
+    // conservative: the node buffer is used only after the scalar sanity
+    // checks above, and no user-controlled node index can run out of bounds.
+    const auto validIndex = [&](int64_t index) {
+        if (index < 0 || static_cast<uint64_t>(index) >= setups)
+            return false;
+        const auto* setup = buffer.nodeSetups.GetInstance(index);
+        if (setup->nodeIndex >= definitions)
+            return false;
+        return buffer.nodes[setup->nodeIndex].instance != nullptr;
+    };
+
+    for (const auto& mod : sectorMods.value())
+    {
+        if (mod.expectedNodes != setups)
+        {
+            LogWarning("[CP25 WorldGuard] Skipped '{}' (expected {} setups, observed {}).",
+                       mod.mod, mod.expectedNodes, setups);
+            continue;
+        }
+
+        bool valid = true;
+        bool complexElements = false;
+        for (const auto& mutation : mod.nodeMutations)
+        {
+            valid &= validIndex(mutation.nodeIndex);
+            complexElements |= !mutation.elementMutations.empty();
+        }
+        for (const auto& deletion : mod.nodeDeletions)
+        {
+            valid &= validIndex(deletion.nodeIndex);
+            complexElements |= !deletion.elementDeletions.empty();
+        }
+
+        if (!valid)
+        {
+            LogWarning("[CP25 WorldGuard] Skipped '{}' due to invalid node index or definition.", mod.mod);
+            continue;
+        }
+        if (complexElements)
+        {
+            // Raw CollisionNode and instanced-element offsets remain unverified.
+            // Do not partially apply a sector mod requiring element mutations.
+            LogWarning("[CP25 WorldGuard] Skipped '{}' because element-level layout is unverified.", mod.mod);
+            continue;
+        }
+
+        LogInfo("[CP25 WorldGuard] Applying guarded sector mod '{}' to resource hash {:#x}.",
+                mod.mod, aSector->path.hash);
+        if (PatchSector(aSector, mod))
+            LogInfo("[CP25 WorldGuard] Sector mod '{}' applied successfully.", mod.mod);
+        else
+            LogWarning("[CP25 WorldGuard] Sector mod '{}' failed its internal validation.", mod.mod);
     }
 }
 
