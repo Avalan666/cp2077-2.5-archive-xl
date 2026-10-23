@@ -34,12 +34,16 @@ void App::ExtensionService::OnBootstrap()
     m_loader->Add<ResourceMetaExtension>();
     m_loader->Add<ResourceLinkExtension>();
     m_loader->Add<ResourcePatchExtension>();
+    m_loader->Add<MeshExtension>();
     m_loader->Add<LocalizationExtension>();
     m_loader->Add<TransmogExtension>();
     m_loader->Add<AnimationExtension>();
+    m_loader->Add<AttachmentExtension>();
+    m_loader->Add<GarmentExtension>();
+    m_loader->Add<PuppetStateExtension>();
     m_loader->Add<QuestPhaseExtension>();
     m_loader->Add<WorldStreamingExtension>();
-    LogInfo("[CP25 Restore] ResourcePatch post-processing and full WorldStreaming hooks restored on 2.5.");
+    LogInfo("[CP25 Appearance] Mesh (without material-loader hook), Attachment (without suffix-value hook), Garment, PuppetState enabled alongside ResourcePatch and WorldStreaming.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
@@ -50,8 +54,9 @@ void App::ExtensionService::OnBootstrap()
         m_loader->OnDepotReady();
     });
 
-    // TweakDB_Load is absent from the 2.5 address library. Do not attach.
-    LogWarning("[CP25 Stage3] TweakDB-ready callback disabled pending a verified 2.5 hook.");
+    // TweakDB_Load is absent from the 2.5 address library. PuppetState remains
+    // partial until its OnTweakDBReady suffix registration can be scheduled.
+    LogWarning("[CP25 Appearance] TweakDB-ready callback unavailable; PuppetState suffix records not yet registered.");
 }
 
 void App::ExtensionService::OnShutdown()
