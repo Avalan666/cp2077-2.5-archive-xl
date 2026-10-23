@@ -65,6 +65,7 @@ private:
     static void OnResourceDeserialize(void* aSerializer, uint64_t, uint64_t, Red::JobHandle& aJob,
                                       Red::ResourceSerializerRequest& aRequest, uint64_t,
                                       Red::DynArray<Red::Handle<Red::ISerializable>>&, uint64_t);
+    static void ProbeResourceReady(Red::ResourceSerializerContext* aContext);
     static void OnResourceReady(Red::ResourceSerializerContext* aContext);
     static void OnEntityTemplateLoad(Red::EntityTemplate* aTemplate, void*);
     static void OnAppearanceResourceLoad(Red::AppearanceResource* aResource, Red::PostLoadParams*);
