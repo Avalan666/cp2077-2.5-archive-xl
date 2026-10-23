@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 JournalRevert] Disable Journal module; retain Customization and synchronous InkSpawner.");
+    LogInfo("[CP25 JournalDepot] Restore Journal merging from depot-ready resource requests.");
 }
