@@ -3,7 +3,7 @@ name: ArchiveXL Cyberpunk 2.5 Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, cp25-loader-probe]
   workflow_dispatch:
 
 permissions:
@@ -47,6 +47,6 @@ jobs:
       - name: Upload compiled DLL
         uses: actions/upload-artifact@v4
         with:
-          name: ArchiveXL-Cyberpunk-2.5-test
+          name: ArchiveXL-Cyberpunk-2.5-${{ github.ref_name }}
           path: build/**/ArchiveXL.dll
           if-no-files-found: error
