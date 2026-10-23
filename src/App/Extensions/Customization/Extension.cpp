@@ -1,4 +1,6 @@
 #include "Extension.hpp"
+#include "App/Configuration.hpp"
+#include <atomic>
 #include "App/Extensions/ResourceLink/Extension.hpp"
 #include "App/Extensions/ResourceMeta/Extension.hpp"
 #include "Red/AppearanceResource.hpp"
@@ -26,6 +28,8 @@ bool App::CustomizationExtension::Load()
     // CP2.5: CharacterCustomizationSystem::Initialize is unmapped. Other
     // initialization/resource hooks are kept; m_customizationActive defaults false.
     LogWarning("[CP25 Extended] Character customization activation hook missing; other customization hooks active.");
+    LogInfo("[CP25 Batch1 C] GetResource lifecycle surrogate {}.",
+            Config::Batch1("customization") ? "enabled" : "disabled");
     HookBefore<Raw::CharacterCustomizationSystem::Uninitialize>(&CustomizationExtension::OnDeactivateSystem).OrThrow();
     HookBefore<Raw::CharacterCustomizationSystem::GetResource>(&CustomizationExtension::OnPrepareResource).OrThrow();
     HookBefore<Raw::CharacterCustomizationSystem::InitializeAppOption>(&CustomizationExtension::OnInitAppOption).OrThrow();
@@ -87,12 +91,28 @@ void App::CustomizationExtension::OnActivateSystem(App::CustomizationSystem* aSy
 
 void App::CustomizationExtension::OnDeactivateSystem(App::CustomizationSystem* aSystem)
 {
+    if (Config::Batch1("customization"))
+        LogInfo("[CP25 Batch1 C] Customization lifecycle deactivated.");
     m_customizationActive = false;
 }
 
 void App::CustomizationExtension::OnPrepareResource(App::CustomizationSystem* aSystem,
     Red::SharedPtr<Red::ResourceToken<Red::gameuiCharacterCustomizationInfoResource>>& aOut, bool aIsMale)
 {
+    if (Config::Batch1("customization"))
+    {
+        // GetResource belongs to the same customization system and is already
+        // hooked on CP2.5, unlike its Initialize entry point.
+        if (!m_customizationActive)
+        {
+            m_customizationActive = true;
+            LogInfo("[CP25 Batch1 C] Customization lifecycle activated via GetResource (male={}).", aIsMale);
+        }
+        static std::atomic<uint32_t> observations{0};
+        if (++observations <= 8)
+            LogInfo("[CP25 Batch1 C] GetResource event={} male={} active={}.",
+                    observations.load(), aIsMale, m_customizationActive);
+    }
     MergeCustomEntries(aSystem);
 }
 
