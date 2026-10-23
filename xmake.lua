@@ -36,6 +36,10 @@ end
 
 add_requires("hopscotch-map", "minhook", "spdlog", "tiltedcore", "yaml-cpp")
 add_requires("mimalloc 2.2.4", {configs = {rltgenrandom = true}})
+add_requireconfs("tiltedcore.mimalloc", {
+    version = "2.2.4",
+    override = true
+})
 
 target("ArchiveXL")
     set_default(true)
