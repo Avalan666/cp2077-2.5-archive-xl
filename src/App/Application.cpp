@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 SerializerTypes] Read-only RTTI classification of serializer resources across startup and gameplay.");
+    LogInfo("[CP25 Restore] ResourcePatch post-processing and WorldStreaming block/sector/workspot operations enabled.");
 }
