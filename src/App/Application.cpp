@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 Extended] Restored mapped Journal, Customization and synchronous InkSpawner hooks.");
+    LogInfo("[CP25 JournalFix] Prefetch journal resources before root initialization; skip incomplete/null resources.");
 }
