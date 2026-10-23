@@ -39,7 +39,7 @@ void App::ExtensionService::OnBootstrap()
     m_loader->Add<TransmogExtension>();
     m_loader->Add<AnimationExtension>();
     m_loader->Add<QuestPhaseExtension>();
-    LogInfo("[CP25 Stage2] Enabled ResourceMeta, Localization, Transmog, Animation and QuestPhase.");
+    LogInfo("[CP25 DepotCheck] Stage 2 with ResourceExists virtual-vs-direct compatibility diagnostics.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
