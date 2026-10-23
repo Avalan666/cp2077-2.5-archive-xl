@@ -172,12 +172,38 @@ private:
             return aOriginal(aContext, aDestination, aPaths, aOther, aMode, aFlags);
         }
 
+        // In CP2.5 the destination argument points directly to the archive
+        // DynArray, not to ResourceDepot or ArchiveGroup. The verified append
+        // routine 0x140682794 uses 0x50-byte elements, matching Red::Archive.
+        static_assert(sizeof(Red::Archive) == 0x50);
+        auto* destination = reinterpret_cast<const Red::DynArray<Red::Archive>*>(aDestination);
+        const uint32_t countBefore = destination ? destination->Size() : 0;
+
         m_injected.store(true);
         LogInfo("[CP25 Inject] Loading native mod group with {} original + {} bundled archives.",
                 aPaths->Size(), added);
 
         const bool result = aOriginal(aContext, aDestination, &combined, aOther, aMode, aFlags);
-        LogInfo("[CP25 Inject] Original engine loader returned {} after injection.", result);
+        const uint32_t countAfter = destination ? destination->Size() : 0;
+        // On this engine path AL=0 is normal loop completion; AL=1 is an
+        // early-exit path. Archive count and final path provide a stronger test.
+        LogInfo("[CP25 Inject] Loader early-exit={} destination archives before={} after={} delta={}.",
+                result, countBefore, countAfter,
+                static_cast<int64_t>(countAfter) - countBefore);
+        if (destination && countAfter > countBefore && countAfter <= 4096 && destination->Data())
+        {
+            const auto& lastArchive = destination->Back();
+            if (lastArchive.path.Length() <= 4096)
+            {
+                LogInfo("[CP25 Inject] Last registered archive='{}'.",
+                        lastArchive.path.c_str());
+            }
+            else
+            {
+                LogWarning("[CP25 Inject] Last archive path has implausible length={}.",
+                           lastArchive.path.Length());
+            }
+        }
         return result;
     }
 
