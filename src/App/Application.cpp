@@ -1,5 +1,5 @@
 #include "Application.hpp"
-#include "App/Archives/ArchiveService.hpp"
+#include "App/Archives/ArchiveProbe.hpp"
 #include "App/Configuration.hpp"
 #include "App/Environment.hpp"
 #include "App/Extensions/ExtensionService.hpp"
@@ -28,19 +28,14 @@ App::Application::Application(HMODULE aHandle, const RED4ext::v1::Sdk* aSdk)
     Register<Support::RED4extProvider>(aHandle, aSdk)
         ->EnableAddressLibrary()
         ->RegisterScripts(Env::ScriptsDir());
-    Register<Support::RedLibProvider>();
-
-    Register<App::ResourcePathRegistry>();
-    Register<App::ArchiveService>(Env::GameDir(), Env::BundleDir());
-    Register<App::ExtensionService>(Env::BundleDir());
-    Register<App::EntitySpawnerPatch>();
-    Register<App::WorldWidgetLimitPatch>();
+    // CP2.5 loader probe: deliberately do not bootstrap the legacy archive
+    // loader, extension hooks, or patches with unresolved address hashes.
+    Register<App::ArchiveProbe>();
 }
 
 void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    Migration::CleanUp(Env::LegacyBundleDir());
-    Migration::CleanUp(Env::LegacyScriptsDir());
+    LogInfo("[CP25 Probe] Diagnostic build: no migration cleanup, archive loading, or extensions.");
 }
