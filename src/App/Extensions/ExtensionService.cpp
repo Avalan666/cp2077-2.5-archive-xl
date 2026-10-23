@@ -29,25 +29,17 @@ void App::ExtensionService::OnBootstrap()
 {
     m_loader = Core::MakeUnique<ExtensionLoader>(m_bundleDir, L".xl");
 
-    // Stage 2: extend the tested localization/transmog subset with the
-    // animation and quest-phase modules. Their function IDs are still mapped
-    // on 2.5; their C++ object layouts remain under runtime validation.
-    // Modules with missing IDs (mesh, resource patch, customization, etc.)
-    // remain disabled.
+    // CP2.5: restore modules with available engine hooks; the resource
+    // serializer post-processing stage uses OnResourceReady.
     m_loader->Add<ResourceMetaExtension>();
-    // Re-enable the resource alias/copy engine. Its three addresses exist in
-    // the 2.5 address library; the resource-existence vtable was verified
-    // against the direct native function in the CP25 depot-check build.
     m_loader->Add<ResourceLinkExtension>();
-    // The 2.5 address mapping is missing ResourceSerializer_OnDependenciesReady;
-    // ResourcePatch intentionally omits that one callback in this stage.
     m_loader->Add<ResourcePatchExtension>();
     m_loader->Add<LocalizationExtension>();
     m_loader->Add<TransmogExtension>();
     m_loader->Add<AnimationExtension>();
     m_loader->Add<QuestPhaseExtension>();
     m_loader->Add<WorldStreamingExtension>();
-    LogInfo("[CP25 WorldGuard] Stage 4 plus guarded WorldStreaming sector changes (element edits and world blocks disabled).");
+    LogInfo("[CP25 Restore] ResourcePatch post-processing and full WorldStreaming hooks restored on 2.5.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
