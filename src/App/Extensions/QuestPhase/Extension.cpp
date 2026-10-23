@@ -1,6 +1,7 @@
 #include "Extension.hpp"
 #include "Core/Facades/Container.hpp"
 #include "App/Extensions/ResourceMeta/Extension.hpp"
+#include "Red/ResourceDepot.hpp"
 
 namespace
 {
@@ -43,6 +44,34 @@ void App::QuestPhaseExtension::Configure()
 
     LogInfo("[CP25 Stage2] Configuring quest phase definitions from {} files.", m_configs.size());
     auto depot = Red::ResourceDepot::Get();
+    if (!depot)
+    {
+        LogError("[CP25 DepotCheck] ResourceDepot::Get() returned null.");
+        return;
+    }
+
+    // Temporary read-only diagnostic: the SDK's virtual ResourceExists()
+    // interface might not match the redesigned 2.5 depot vtable. Compare it
+    // with the separately relocated ResourceDepot_CheckResource function.
+    // Two control resources were previously logged as successfully merged.
+    const auto* vtable = *reinterpret_cast<const uintptr_t* const*>(depot);
+    LogInfo("[CP25 DepotCheck] depot={:#x} virtual[3]={:#x} rawCheck={:#x}",
+            reinterpret_cast<uintptr_t>(depot), vtable ? vtable[3] : 0,
+            Raw::ResourceDepot::CheckResource.GetAddress());
+
+    for (const auto* pathStr : {
+             R"(base\localization\en-us\new_start.json)",
+             R"(filter_saves\localization\en-us.json)",
+             R"(mod\quest\newgameplus.quest)",
+             R"(mod\quest\newgameplus_q001.quest)",
+             R"(mod\quest\newgameplus_standalone.quest)"})
+    {
+        const Red::ResourcePath path(pathStr);
+        const bool virtualResult = depot->ResourceExists(path);
+        const bool directResult = Raw::ResourceDepot::CheckResource(depot, path);
+        LogInfo("[CP25 DepotCheck] '{}' virtual={} direct={} match={}",
+                pathStr, virtualResult, directResult, virtualResult == directResult);
+    }
     Core::Set<Red::ResourcePath> invalidPaths;
 
     for (auto& unit : m_configs)
