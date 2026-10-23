@@ -54,15 +54,11 @@ bool App::ResourcePatchExtension::Load()
     LogInfo("[CP25 Stage4] ResourcePatch: installing mapped native hooks (OnDependenciesReady omitted).");
     HookBefore<Raw::ResourceSerializer::Load>(&OnResourceRequest).OrThrow();
     HookBefore<Raw::ResourceSerializer::Deserialize>(&OnResourceDeserialize).OrThrow();
-    // CP2.5: ResourceSerializer_OnDependenciesReady hash is not mapped.
-    // This disables CurveSet, DeviceResource, StreamingWorld and InkAnimation
-    // post-dependency callbacks; the other mapped hooks remain available.
-    LogWarning("[CP25 Stage4] ResourcePatch OnDependenciesReady callback disabled; corresponding resource types will not be post-processed.");
-    // OnResourceReady has its own mapped engine function. Observe this
-    // stage to determine whether it can replace the missing callback.
-    // This probe does NOT modify resource state.
-    HookBefore<Raw::ResourceSerializer::OnResourceReady>(&ProbeResourceReady).OrThrow();
-    LogInfo("[CP25 SerializerProbe] Attached read-only ResourceSerializer::OnResourceReady observer.");
+    // Cyberpunk 2.5 no longer maps OnDependenciesReady. OnResourceReady
+    // receives a valid ResourceSerializerContext and the same runtime RTTI
+    // resource objects. Execute the original post-processing here.
+    HookBefore<Raw::ResourceSerializer::OnResourceReady>(&OnResourceReady).OrThrow();
+    LogInfo("[CP25 Restore] ResourcePatch post-processing enabled via ResourceSerializer::OnResourceReady.");
     HookBefore<Raw::EntityTemplate::PostLoad>(&OnEntityTemplateLoad).OrThrow();
     HookBefore<Raw::AppearanceResource::PostLoad>(&OnAppearanceResourceLoad).OrThrow();
     HookBefore<Raw::CMesh::PostLoad>(&OnMeshResourceLoad).OrThrow();
@@ -218,85 +214,17 @@ void App::ResourcePatchExtension::OnResourceDeserialize(void* aSerializer, uint6
     }
 }
 
-void App::ResourcePatchExtension::ProbeResourceReady(Red::ResourceSerializerContext* aContext)
-{
-    static std::atomic<uint32_t> calls{0};
-    static std::atomic<uint32_t> relevantTypes{0};
-    const uint32_t n = ++calls;
-    if (!aContext)
-    {
-        LogWarning("[CP25 SerializerTypes] call={} context=NULL", n);
-        return;
-    }
-
-    const uint32_t count = aContext->serializables.Size();
-    const auto data = reinterpret_cast<uintptr_t>(aContext->serializables.Data());
-    const bool plausible = count <= 128 && (count == 0 || data != 0);
-    if (!plausible)
-    {
-        if (n <= 16)
-            LogWarning("[CP25 SerializerTypes] call={} implausible array count={} data={:#x}; inspection skipped.",
-                       n, count, data);
-        return;
-    }
-
-    if (n <= 8)
-        LogInfo("[CP25 SerializerTypes] call={} pathHash={:#x} serializables={}",
-                n, aContext->request.path.hash, count);
-
-    // Types are inspected without changing any resources. Unlike the prior
-    // probe, relevant resource types are reported even if they are loaded
-    // long after the first 64 callbacks (e.g. after entering gameplay).
-    const auto inspect = (std::min)(count, uint32_t{16});
-    for (uint32_t i = 0; i < inspect; ++i)
-    {
-        const auto& serializable = aContext->serializables[i];
-        if (!serializable)
-        {
-            if (n <= 8)
-                LogWarning("[CP25 SerializerTypes] call={} item={} NULL handle", n, i);
-            continue;
-        }
-
-        const auto* nativeType = serializable->GetNativeType();
-        if (!nativeType)
-        {
-            if (n <= 8)
-                LogWarning("[CP25 SerializerTypes] call={} item={} NULL native type", n, i);
-            continue;
-        }
-
-        const auto typeName = nativeType->GetName();
-        const bool curve = typeName == Red::GetTypeName<Red::CurveSet>();
-        const bool device = typeName == Red::GetTypeName<Red::gameDeviceResource>();
-        const bool world = typeName == Red::GetTypeName<Red::worldStreamingWorld>();
-        const bool lip = typeName == Red::GetTypeName<Red::inkanimAnimationLibraryResource>();
-        const bool relevant = curve || device || world || lip;
-
-        if (relevant)
-        {
-            const uint32_t match = ++relevantTypes;
-            if (match <= 80)
-            {
-                LogInfo("[CP25 SerializerTypes] TARGET#{} call={} item={} type='{}' requestPath={:#x} count={}",
-                        match, n, i, typeName.ToString(), aContext->request.path.hash, count);
-            }
-        }
-        else if (n <= 12 && i < 3)
-        {
-            LogInfo("[CP25 SerializerTypes] sample call={} item={} type='{}' requestPath={:#x}",
-                    n, i, typeName.ToString(), aContext->request.path.hash);
-        }
-    }
-}
-
 void App::ResourcePatchExtension::OnResourceReady(Red::ResourceSerializerContext* aContext)
 {
-    if (!aContext->serializables.IsEmpty())
+    if (!aContext || aContext->serializables.IsEmpty())
+        return;
+
+    for (const auto& serializable : aContext->serializables)
     {
-        for (const auto& serializable : aContext->serializables)
-        {
-            switch (serializable->GetNativeType()->GetName())
+        if (!serializable)
+            continue;
+
+        switch (serializable->GetNativeType()->GetName())
             {
             case Red::GetTypeName<Red::CurveSet>():
             {
@@ -332,7 +260,6 @@ void App::ResourcePatchExtension::OnResourceReady(Red::ResourceSerializerContext
             }
             }
         }
-    }
 }
 
 void App::ResourcePatchExtension::OnEntityTemplateLoad(Red::EntityTemplate* aTemplate, void*)
