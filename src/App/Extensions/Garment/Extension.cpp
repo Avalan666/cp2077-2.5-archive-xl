@@ -1,4 +1,6 @@
 #include "Extension.hpp"
+#include "App/Configuration.hpp"
+#include <atomic>
 #include "App/Extensions/Customization/Extension.hpp"
 #include "App/Shared/ResourcePathRegistry.hpp"
 #include "Core/Facades/Container.hpp"
@@ -291,16 +293,25 @@ void* App::GarmentExtension::OnResolveSuffixes(Red::CString& aResult,
                                                     const Red::ItemID& aItemID)
 {
     auto appearanceName = Red::GetFlatValue<Red::CName>({aItemRecord.recordID, ".appearanceName"});
+    static std::atomic<uint32_t> observed{0};
+    auto event = Config::Batch1("suffix") ? ++observed : 0;
     if (s_dynamicAppearance->IsDynamicAppearanceName(appearanceName))
     {
         if (aResult.Length() > 0)
         {
             aResult = {};
         }
+        if (event && event <= 12)
+            LogInfo("[CP25 Batch1 B] Suffix event={} dynamic=true item={:#x} owner={} result='{}'.",
+                    event, aItemID.tdbid.hash, static_cast<bool>(aOwner), aResult.c_str());
         return &aResult;
     }
 
-    return Raw::AppearanceChanger::GetSuffixes(aResult, aOwner, aOwnerOverride, aItemRecord, aItemID);
+    auto result = Raw::AppearanceChanger::GetSuffixes(aResult, aOwner, aOwnerOverride, aItemRecord, aItemID);
+    if (event && event <= 12)
+        LogInfo("[CP25 Batch1 B] Suffix event={} dynamic=false item={:#x} owner={} result='{}'.",
+                event, aItemID.tdbid.hash, static_cast<bool>(aOwner), aResult.c_str());
+    return result;
 }
 
 void App::GarmentExtension::OnGetVisualTags(Red::AppearanceNameVisualTagsPreset* aPreset, Red::ResourcePath aEntityPath,
