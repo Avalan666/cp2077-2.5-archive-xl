@@ -41,9 +41,12 @@ void App::ExtensionService::OnBootstrap()
     m_loader->Add<AttachmentExtension>();
     m_loader->Add<GarmentExtension>();
     m_loader->Add<PuppetStateExtension>();
+    m_loader->Add<CustomizationExtension>();
+    m_loader->Add<JournalExtension>();
     m_loader->Add<QuestPhaseExtension>();
     m_loader->Add<WorldStreamingExtension>();
-    LogInfo("[CP25 Appearance] Mesh (without material-loader hook), Attachment (without suffix-value hook), Garment, PuppetState enabled alongside ResourcePatch and WorldStreaming.");
+    m_loader->Add<InkSpawnerExtension>();
+    LogInfo("[CP25 Extended] Added Customization, Journal and synchronous InkSpawner alongside appearance, ResourcePatch and WorldStreaming systems.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
