@@ -16,6 +16,7 @@ public:
     explicit ExtensionService(std::filesystem::path aBundleDir = {});
 
     void Configure();
+    void TryRestoreTweakDB(const char* aStage);
 
 protected:
     void OnBootstrap() override;
@@ -24,5 +25,7 @@ protected:
     Core::UniquePtr<ExtensionLoader> m_loader;
     std::filesystem::path m_bundleDir;
     std::mutex m_reloadMutex;
+    std::mutex m_tweakDBMutex;
+    bool m_tweakDBDispatched = false;
 };
 }
