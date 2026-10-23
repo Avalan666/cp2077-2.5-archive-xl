@@ -39,11 +39,14 @@ void App::ExtensionService::OnBootstrap()
     // the 2.5 address library; the resource-existence vtable was verified
     // against the direct native function in the CP25 depot-check build.
     m_loader->Add<ResourceLinkExtension>();
+    // The 2.5 address mapping is missing ResourceSerializer_OnDependenciesReady;
+    // ResourcePatch intentionally omits that one callback in this stage.
+    m_loader->Add<ResourcePatchExtension>();
     m_loader->Add<LocalizationExtension>();
     m_loader->Add<TransmogExtension>();
     m_loader->Add<AnimationExtension>();
     m_loader->Add<QuestPhaseExtension>();
-    LogInfo("[CP25 Stage3] Enabled ResourceMeta, ResourceLink, Localization, Transmog, Animation and QuestPhase.");
+    LogInfo("[CP25 Stage4] Enabled ResourcePatch (without OnDependenciesReady), ResourceMeta, ResourceLink, Localization, Transmog, Animation and QuestPhase.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
