@@ -40,5 +40,5 @@ void App::Application::OnStarting()
 {
     LogInfo("{} {} is starting...", Project::Name, Project::Version.to_string());
 
-    LogInfo("[CP25 WorldProbe] Read-only streaming sector compatibility diagnostics; no world mutations.");
+    LogInfo("[CP25 WorldLayout] Read-only streaming sector node-buffer metadata validation; no world mutations.");
 }
