@@ -35,7 +35,13 @@ bool App::QuestPhaseExtension::Unload()
 void App::QuestPhaseExtension::Configure()
 {
     s_phases.clear();
+    if (m_configs.empty())
+    {
+        LogInfo("[CP25 Stage2] No quest phase definitions; skipping depot queries.");
+        return;
+    }
 
+    LogInfo("[CP25 Stage2] Configuring quest phase definitions from {} files.", m_configs.size());
     auto depot = Red::ResourceDepot::Get();
     Core::Set<Red::ResourcePath> invalidPaths;
 
