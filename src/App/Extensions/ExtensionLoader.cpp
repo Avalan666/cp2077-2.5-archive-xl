@@ -1,5 +1,6 @@
 #include "ExtensionLoader.hpp"
 #include "App/Utils/Str.hpp"
+#include "App/Environment.hpp"
 
 App::ExtensionLoader::ExtensionLoader(std::filesystem::path aBundleDir, std::wstring aConfigExt)
     : m_bundleDir(std::move(aBundleDir))
@@ -20,38 +21,19 @@ void App::ExtensionLoader::Configure()
         for (const auto& module : m_configurables)
             module->ResetConfigs();
 
+        // CP2.5 no longer exposes the old ResourceDepot::groups layout.
+        // Discover .xl files from ordinary game mod directories instead.
+        // The bundle directory is searched first to retain its precedence.
         Core::Vector<std::filesystem::path> configDirs;
         Core::Vector<std::filesystem::path> configFiles;
 
-        {
-            auto depot = Red::ResourceDepot::Get();
-
-            for (const auto& group : depot->groups | std::views::reverse)
-            {
-                if (group.scope == Red::ArchiveScope::Mod)
-                {
-                    if (group.basePath.Length() > 0)
-                    {
-                        configDirs.emplace_back(Str::Widen(group.basePath.c_str()));
-                    }
-                    else
-                    {
-                        for (const auto& archive : group.archives)
-                        {
-                            configFiles.emplace_back(Str::Widen(archive.path.c_str()) + m_customConfigExt);
-                        }
-                    }
-                }
-            }
-        }
-
         if (!m_bundleDir.empty())
-        {
-            if (std::find(configDirs.begin(), configDirs.end(), m_bundleDir) == configDirs.end())
-            {
-                configDirs.insert(configDirs.begin(), m_bundleDir);
-            }
-        }
+            configDirs.emplace_back(m_bundleDir);
+
+        configDirs.emplace_back(Env::GameDir() / L"archive" / L"pc" / L"mod");
+        configDirs.emplace_back(Env::GameDir() / L"mods");
+
+        LogInfo("[CP25 Stage1] Scanning Bundle, archive/pc/mod and mods for .xl files; old ResourceDepot::groups is not accessed.");
 
         bool foundAny = false;
         bool successAll = true;
