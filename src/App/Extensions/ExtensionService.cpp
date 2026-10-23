@@ -35,11 +35,15 @@ void App::ExtensionService::OnBootstrap()
     // Modules with missing IDs (mesh, resource patch, customization, etc.)
     // remain disabled.
     m_loader->Add<ResourceMetaExtension>();
+    // Re-enable the resource alias/copy engine. Its three addresses exist in
+    // the 2.5 address library; the resource-existence vtable was verified
+    // against the direct native function in the CP25 depot-check build.
+    m_loader->Add<ResourceLinkExtension>();
     m_loader->Add<LocalizationExtension>();
     m_loader->Add<TransmogExtension>();
     m_loader->Add<AnimationExtension>();
     m_loader->Add<QuestPhaseExtension>();
-    LogInfo("[CP25 Stage2] Enabled ResourceMeta, Localization, Transmog, Animation and QuestPhase.");
+    LogInfo("[CP25 Stage3] Enabled ResourceMeta, ResourceLink, Localization, Transmog, Animation and QuestPhase.");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
@@ -51,7 +55,7 @@ void App::ExtensionService::OnBootstrap()
     });
 
     // TweakDB_Load is absent from the 2.5 address library. Do not attach.
-    LogWarning("[CP25 Stage2] TweakDB-ready callback disabled pending a verified 2.5 hook.");
+    LogWarning("[CP25 Stage3] TweakDB-ready callback disabled pending a verified 2.5 hook.");
 }
 
 void App::ExtensionService::OnShutdown()
