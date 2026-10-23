@@ -32,7 +32,13 @@ bool App::AnimationExtension::Unload()
 void App::AnimationExtension::Configure()
 {
     s_animsByTarget.clear();
+    if (m_configs.empty())
+    {
+        LogInfo("[CP25 Stage2] No entity animation definitions; skipping depot queries.");
+        return;
+    }
 
+    LogInfo("[CP25 Stage2] Configuring entity animation definitions from {} files.", m_configs.size());
     auto depot = Red::ResourceDepot::Get();
 
     Core::Set<Red::ResourcePath> invalidPaths;
