@@ -46,7 +46,8 @@ void App::ExtensionService::OnBootstrap()
     m_loader->Add<TransmogExtension>();
     m_loader->Add<AnimationExtension>();
     m_loader->Add<QuestPhaseExtension>();
-    LogInfo("[CP25 Stage4] Enabled ResourcePatch (without OnDependenciesReady), ResourceMeta, ResourceLink, Localization, Transmog, Animation and QuestPhase.");
+    m_loader->Add<WorldStreamingExtension>();
+    LogInfo("[CP25 WorldProbe] Stage 4 plus read-only WorldStreaming observer (world changes disabled).");
 
     HookOnceAfter<Raw::GameApplication::InitResourceDepot>([&]() {
         m_loader->Configure();
