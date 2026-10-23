@@ -13,6 +13,7 @@ class JournalExtension : public ConfigurableExtensionImpl<JournalConfig>
 public:
     std::string_view GetName() override;
     bool Load() override;
+    void PostConfigure() override;
     void Reload() override;
     bool Unload() override;
 
